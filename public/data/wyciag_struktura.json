@@ -1,0 +1,340 @@
+{
+  "metadata": {
+    "bank": "PKO BP SA",
+    "bank_full_name": "Powszechna Kasa Oszczędności Bank Polski Spółka Akcyjna",
+    "oddzial": "Oddział 1 w Nowym Dworze Mazowieckim",
+    "adres_oddzialu": "ul. Modlińska 10, 05-100 Nowy Dwór Mazowiecki",
+    "nr_rachunku": "12 1020 1026 0000 1402 0717 1244",
+    "nr_iban": "PL 12 1020 1026 0000 1402 0717 1244",
+    "rodzaj_rachunku": "RACHUNEK FIRMOWY",
+    "waluta": "PLN",
+    "wlasciciel": "TIENTO SPÓŁKA Z OGRANICZONĄ ODPOWIEDZIALNOŚCIĄ SPÓŁKA KOMANDYTOWA",
+    "adres_wlasciciela": "UL. JASNA 15 M.B, 05-100 NOWY DWÓR MAZOWIECKI",
+    "okres_wyciagu": {
+      "od": "2026-04-01",
+      "do": "2026-04-30"
+    },
+    "numer_wyciagu": "4/2026",
+    "data_wyciagu": "2026-04-30",
+    "liczba_stron": 3
+  },
+  "podsumowanie": {
+    "saldo_poprzednie": 112.93,
+    "obroty_ma": 235607.50,
+    "obroty_wn": -111017.06,
+    "saldo_koncowe": 124703.37
+  },
+  "kolumny_transakcji": {
+    "data_operacji": {
+      "opis": "Data księgowania operacji",
+      "format": "DD.MM.YYYY",
+      "przyklad": "01.04.2026"
+    },
+    "data_waluty": {
+      "opis": "Data waluty (w drugim wierszu transakcji)",
+      "format": "DD.MM.YYYY",
+      "przyklad": "01.04.2026"
+    },
+    "identyfikator_operacji": {
+      "opis": "Unikalny identyfikator operacji bankowej",
+      "format": "alfanumeryczny, różne wzorce",
+      "przyklady": [
+        "6591MX94820000691",
+        "6598FE94960006144",
+        "6616MX91730183040"
+      ]
+    },
+    "typ_operacji": {
+      "opis": "Typ/kategoria operacji bankowej",
+      "wartosci": [
+        "OPŁATA MIESIĘCZNA ZA KARTĘ",
+        "PRZELEW PRZYCHODZĄCY",
+        "PRZELEW WYCHODZĄCY",
+        "PRZELEW NA TELEFON WYCHODZĄCY WEW.",
+        "PŁATNOŚĆ WEB - KOD MOBILNY",
+        "ZAKUP PRZY UŻYCIU KARTY",
+        "PRZELEW PRZYCH. SPLIT-PAYMENT",
+        "PRZELEW Z/NA RACHUNKU VAT"
+      ]
+    },
+    "opis_operacji": {
+      "opis": "Szczegółowy opis w drugim (i ewentualnie trzecim/czwartym) wierszu transakcji",
+      "format": "tekst wieloliniowy, różne struktury w zależności od typu"
+    },
+    "kwota_operacji": {
+      "opis": "Kwota transakcji (ujemna = obciążenie, dodatnia = uznanie)",
+      "format": "liczba z separatorem dziesiętnym przecinek, separator tysięcy spacja",
+      "przyklady": ["-10,00", "9 102,00", "-319,39", "184 500,00"]
+    },
+    "saldo": {
+      "opis": "Saldo rachunku po operacji",
+      "format": "liczba z separatorem dziesiętnym przecinek, separator tysięcy spacja",
+      "przyklad": "124 703,37"
+    }
+  },
+  "struktura_wiersza": {
+    "opis": "Każda transakcja zajmuje minimum 2 wiersze w PDF",
+    "wiersz_1": "Data operacji | Identyfikator operacji | TYP OPERACJI | Kwota operacji | Saldo",
+    "wiersz_2": "Data waluty | Opis operacji (kontrahent, nr rachunku, tytuł itp.)",
+    "wiersze_dodatkowe": "Kontynuacja opisu operacji (opcjonalnie 3-4 wiersze)"
+  },
+  "transakcje_paliwowe": {
+    "opis": "Transakcje na stacjach paliw zidentyfikowane w wyciągu",
+    "wzorce_identyfikacji": [
+      "Lokalizacja zawiera nazwy stacji: SHELL, CIRCLE K, BP, ORLEN, AMIC, LOTOS",
+      "Typ operacji: ZAKUP PRZY UŻYCIU KARTY",
+      "Opis zawiera: Karta:XXXXXX******XXXX, Nazwisko i imię, Lokalizacja, Nr ref, Kwota oryg."
+    ],
+    "przyklady": [
+      {
+        "data_operacji": "2026-04-26",
+        "data_waluty": "2026-04-24",
+        "identyfikator": "6616MX91730183040",
+        "typ": "ZAKUP PRZY UŻYCIU KARTY",
+        "kwota": -319.39,
+        "saldo": 125175.12,
+        "karta": "456991******2564",
+        "nazwisko_imie": "BOLIŃSKI ADAM",
+        "lokalizacja": "SHELL Ostroda PL",
+        "nr_ref": "74838496115360802284805",
+        "kwota_oryg": "319,39 PLN",
+        "stacja_paliw": "SHELL"
+      },
+      {
+        "data_operacji": "2026-04-28",
+        "data_waluty": "2026-04-25",
+        "identyfikator": "6618MX98260106536",
+        "typ": "ZAKUP PRZY UŻYCIU KARTY",
+        "kwota": -376.79,
+        "saldo": 124703.37,
+        "karta": "456991******2564",
+        "nazwisko_imie": "BOLIŃSKI ADAM",
+        "lokalizacja": "CIRCLE K NOWY DWOR MAZOWI NOWY DWOR MAZ PL",
+        "nr_ref": "74570006116711600173392",
+        "kwota_oryg": "376,79 PLN",
+        "stacja_paliw": "CIRCLE K"
+      }
+    ]
+  },
+  "wszystkie_transakcje": [
+    {
+      "data_operacji": "2026-04-01",
+      "data_waluty": "2026-04-01",
+      "identyfikator": "6591MX94820000691",
+      "typ": "OPŁATA MIESIĘCZNA ZA KARTĘ",
+      "opis": "456991******2564, 26.02-25.03",
+      "kwota": -10.00,
+      "saldo": 102.93
+    },
+    {
+      "data_operacji": "2026-04-08",
+      "data_waluty": "2026-04-08",
+      "identyfikator": "6598FE94960006144",
+      "typ": "PRZELEW PRZYCHODZĄCY",
+      "opis": "FVS/9/03/2026 25105010251000009080872113 'CENTRUM MEDYCZNE PUŁAWSKA' SPÓŁKA Z OGRANICZONĄ ODPOWIEDZIALNOŚCIĄ UL.PUŁAWSKA 49 05-500 PIASECZNO Data dokumentu: 08.04.2026",
+      "kwota": 9102.00,
+      "saldo": 9204.93
+    },
+    {
+      "data_operacji": "2026-04-11",
+      "data_waluty": "2026-04-11",
+      "identyfikator": "6601MX93950008470",
+      "typ": "PŁATNOŚĆ WEB - KOD MOBILNY",
+      "opis": "Tel.:48503504550 Godz.10:59:25 Lokalizacja: allegro.pl Nr ref: 00000093768393935",
+      "kwota": -58.87,
+      "saldo": 9146.06
+    },
+    {
+      "data_operacji": "2026-04-14",
+      "data_waluty": "2026-04-14",
+      "identyfikator": "6604FE00900141526",
+      "typ": "PRZELEW NA TELEFON WYCHODZĄCY WEW.",
+      "opis": "WIENIEC OD: 48503504550 DO: 48501103806 50 1020 5558 1111 1499 0240 0059 MARTA BRUZDA Ref. wł. zlec.: 176828098980",
+      "kwota": -33.00,
+      "saldo": 9113.06
+    },
+    {
+      "data_operacji": "2026-04-14",
+      "data_waluty": "2026-04-14",
+      "identyfikator": "6604FE00600132616",
+      "typ": "PRZELEW WYCHODZĄCY",
+      "opis": "PŁATNOŚĆ ZA FV 87 1240 6960 2022 0000 0677 7630 SOLID SECURITY Ref. wł. zlec.: 176828105952",
+      "kwota": -210.26,
+      "saldo": 8902.80
+    },
+    {
+      "data_operacji": "2026-04-14",
+      "data_waluty": "2026-04-14",
+      "identyfikator": "6604MX91850009699",
+      "typ": "PŁATNOŚĆ WEB - KOD MOBILNY",
+      "opis": "Tel.:48503504550 Godz.13:06:29 Lokalizacja: allegro.pl Nr ref: 00000093792384423",
+      "kwota": -266.72,
+      "saldo": 8636.08
+    },
+    {
+      "data_operacji": "2026-04-14",
+      "data_waluty": "2026-04-14",
+      "identyfikator": "6604MX91850009700",
+      "typ": "PŁATNOŚĆ WEB - KOD MOBILNY",
+      "opis": "Tel.:48503504550 Godz.13:07:31 Lokalizacja: allegro.pl Nr ref: 00000093792393505",
+      "kwota": -369.37,
+      "saldo": 8266.71
+    },
+    {
+      "data_operacji": "2026-04-15",
+      "data_waluty": "2026-04-15",
+      "identyfikator": "6605FE96620013308",
+      "typ": "PRZELEW PRZYCHODZĄCY",
+      "opis": "FVS/11/03/2026 33114010100000343505001001 ATMAN SPÓŁKA Z OGRANICZONĄ ODPOWIEDZIALNOŚCIĄ UL.GROCHOWSKA 21A 04-186 WARSZAWA PL Data dokumentu: 14.04.2026",
+      "kwota": 1230.00,
+      "saldo": 9496.71
+    },
+    {
+      "data_operacji": "2026-04-17",
+      "data_waluty": "2026-04-17",
+      "identyfikator": "6607FE96580004947",
+      "typ": "PRZELEW PRZYCHODZĄCY",
+      "opis": "Fv. FVS/10/03/2026 04236000050000004550290537 EMAGINE SP. Z O.O. Wronia 10 00-840 Warszawa Data dokumentu: 17.04.2026",
+      "kwota": 40774.50,
+      "saldo": 50271.21
+    },
+    {
+      "data_operacji": "2026-04-20",
+      "data_waluty": "2026-04-20",
+      "identyfikator": "6610FE00300265341",
+      "typ": "PRZELEW WYCHODZĄCY",
+      "opis": "158/00080/26/1/277 15 1160 2202 0000 0003 1566 2978 CYGAN AUTO",
+      "kwota": -22900.39,
+      "saldo": 27370.82
+    },
+    {
+      "data_operacji": "2026-04-21",
+      "data_waluty": "2026-04-20",
+      "identyfikator": "6611MX96980030903",
+      "typ": "PŁATNOŚĆ WEB - KOD MOBILNY",
+      "opis": "Tel.:48503504550 Godz.12:45:27 Lokalizacja: orange.pl Nr ref: 00000093837131358",
+      "kwota": -375.97,
+      "saldo": 26994.85
+    },
+    {
+      "data_operacji": "2026-04-21",
+      "data_waluty": "2026-04-20",
+      "identyfikator": "6611MX96980030904",
+      "typ": "PŁATNOŚĆ WEB - KOD MOBILNY",
+      "opis": "Tel.:48503504550 Godz.12:46:21 Lokalizacja: orange.pl Nr ref: 00000093837139032",
+      "kwota": -233.08,
+      "saldo": 26761.77
+    },
+    {
+      "data_operacji": "2026-04-21",
+      "data_waluty": "2026-04-20",
+      "identyfikator": "6611MX96980030905",
+      "typ": "PŁATNOŚĆ WEB - KOD MOBILNY",
+      "opis": "Tel.:48503504550 Godz.12:46:58 Lokalizacja: orange.pl Nr ref: 00000093837144753",
+      "kwota": -259.88,
+      "saldo": 26501.89
+    },
+    {
+      "data_operacji": "2026-04-21",
+      "data_waluty": "2026-04-21",
+      "identyfikator": "6611FE97910010926",
+      "typ": "PRZELEW PRZYCH. SPLIT-PAYMENT",
+      "opis": "Kwota VAT:34500,00 ID Dostawcy:5311692451 Nr faktury lub cores zbiorczości:FVS/8/03/2026 Tytuł:FVS/8/03/2026 33114010100000343505001001 ATMAN SPÓŁKA Z OGRANICZONĄ ODPOWIEDZIALNOŚCIĄ UL.GROCHOWSKA 21A 04-186 WARSZAWA PL Data dokumentu: 20.04.2026",
+      "kwota": 184500.00,
+      "saldo": 211001.89
+    },
+    {
+      "data_operacji": "2026-04-21",
+      "data_waluty": "2026-04-21",
+      "identyfikator": "6611FE97910010926",
+      "typ": "PRZELEW Z/NA RACHUNKU VAT",
+      "opis": "Kwota VAT:34500,00 ID Dostawcy:5311692451 Nr faktury lub cores zbiorczości:FVS/8/03/2026 Tytuł:FVS/8/03/2026 60 1020 1026 0000 1802 0717 1251 TIENTO SPÓŁKA Z OGRANICZONĄ ODPOWIEDZIALNOŚCIĄ SPÓŁKA KOMANDYTOWA UL. JASNA 15 M.B 05-100 NOWY DWÓR MAZOWIECKI",
+      "kwota": -34500.00,
+      "saldo": 176501.89
+    },
+    {
+      "data_operacji": "2026-04-21",
+      "data_waluty": "2026-04-21",
+      "identyfikator": "6611FE01000134447",
+      "typ": "PRZELEW WYCHODZĄCY",
+      "opis": "ZWROT ŚRODKÓW 93 1020 1026 0000 1602 0717 1046 ADAM BOLIŃSKI DBA-NET",
+      "kwota": -51000.00,
+      "saldo": 125501.89
+    },
+    {
+      "data_operacji": "2026-04-22",
+      "data_waluty": "2026-04-22",
+      "identyfikator": "6612FE06600055489",
+      "typ": "PRZELEW WYCHODZĄCY",
+      "opis": "ZALEGŁOŚCI MIKROFLOTA 59 1240 6960 6666 0000 0744 0759 PKO",
+      "kwota": -7.38,
+      "saldo": 125494.51
+    },
+    {
+      "data_operacji": "2026-04-26",
+      "data_waluty": "2026-04-24",
+      "identyfikator": "6616MX91730183040",
+      "typ": "ZAKUP PRZY UŻYCIU KARTY",
+      "opis": "Karta:456991******2564 Nazwisko i imię: BOLIŃSKI ADAM Lokalizacja: SHELL Ostroda PL Nr ref: 74838496115360802284805 Kwota oryg.: 319,39 PLN",
+      "kwota": -319.39,
+      "saldo": 125175.12,
+      "jest_paliwowa": true,
+      "stacja": "SHELL",
+      "lokalizacja_stacji": "Ostroda"
+    },
+    {
+      "data_operacji": "2026-04-27",
+      "data_waluty": "2026-04-25",
+      "identyfikator": "6617MX90090176213",
+      "typ": "ZAKUP PRZY UŻYCIU KARTY",
+      "opis": "Karta:456991******2564 Nazwisko i imię: BOLIŃSKI ADAM Lokalizacja: MARKET PSB MROWKA WIELISZEW PL Nr ref: 74230786115189488713722 Kwota oryg.: 94,96 PLN",
+      "kwota": -94.96,
+      "saldo": 125080.16,
+      "jest_paliwowa": false
+    },
+    {
+      "data_operacji": "2026-04-28",
+      "data_waluty": "2026-04-25",
+      "identyfikator": "6618MX98260106536",
+      "typ": "ZAKUP PRZY UŻYCIU KARTY",
+      "opis": "Karta:456991******2564 Nazwisko i imię: BOLIŃSKI ADAM Lokalizacja: CIRCLE K NOWY DWOR MAZOWI NOWY DWOR MAZ PL Nr ref: 74570006116711600173392 Kwota oryg.: 376,79 PLN",
+      "kwota": -376.79,
+      "saldo": 124703.37,
+      "jest_paliwowa": true,
+      "stacja": "CIRCLE K",
+      "lokalizacja_stacji": "NOWY DWÓR MAZOWIECKI"
+    },
+    {
+      "data_operacji": "2026-04-28",
+      "data_waluty": "2026-04-28",
+      "identyfikator": "6618FE02800211525",
+      "typ": "PRZELEW WYCHODZĄCY",
+      "opis": "/OPT/X/////P24-U9A-T3R-V0A 24 1020 4027 0000 1702 1791 5846 PAYPRO S.A.",
+      "kwota": -1.00,
+      "saldo": 124702.37
+    },
+    {
+      "data_operacji": "2026-04-29",
+      "data_waluty": "2026-04-29",
+      "identyfikator": "6619FE90740013256",
+      "typ": "PRZELEW PRZYCHODZĄCY",
+      "opis": "/OPF/X/////267650619:Przelewy24 zwrot p24-U9A-T3R-V0A 01964de0-ad97-778a-8f45-eae4fcd5211 11109028510000000132975079 PAYPRO SPÓŁKA AKCYJNA UL. PASTELOWA8 60-198 POZNAŃ PL Data dokumentu: 28.04.2026",
+      "kwota": 1.00,
+      "saldo": 124703.37
+    }
+  ],
+  "reguly_parsowania": {
+    "format_daty": "DD.MM.YYYY",
+    "separator_dziesietny": ",",
+    "separator_tysiecy": " (spacja)",
+    "znak_kwoty": "ujemna = obciążenie (wydatek), dodatnia = uznanie (wpływ)",
+    "kodowanie": "UTF-8",
+    "wielowierszowe_transakcje": true,
+    "stacje_paliw_keywords": ["SHELL", "CIRCLE K", "BP", "ORLEN", "AMIC", "LOTOS", "TOTAL", "MOYA", "AVIA"],
+    "filtr_paliwowy": {
+      "typ_operacji": "ZAKUP PRZY UŻYCIU KARTY",
+      "pole_lokalizacja": "regex: Lokalizacja:\\s*(.+?)\\s*PL",
+      "matchowanie_stacji": "porównanie lokalizacji z listą stacje_paliw_keywords (case-insensitive)"
+    }
+  }
+}

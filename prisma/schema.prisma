@@ -1,0 +1,151 @@
+generator client {
+    provider = "prisma-client-js"
+    binaryTargets = ["native", "linux-musl-openssl-3.0.x", "debian-openssl-3.0.x"]
+}
+
+datasource db {
+    provider = "postgresql"
+    url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String
+  email         String    @unique
+  password      String
+  role          String    @default("USER") // ADMIN or USER
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  mileageEntries MileageEntry[]
+}
+
+model Vehicle {
+  id                String    @id @default(cuid())
+  registrationNumber String   @unique
+  brand             String    @default("")
+  model             String    @default("")
+  startDate         DateTime
+  endDate           DateTime?
+  odometerStart     Float     @default(0)
+  odometerEnd       Float?    
+  active            Boolean   @default(true)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  mileageEntries    MileageEntry[]
+  fuelPurchases     FuelPurchase[]
+}
+
+model MileageEntry {
+  id              String    @id @default(cuid())
+  entryNumber     Int
+  date            DateTime
+  purpose         String
+  kilometers      Float
+  odometerBefore  Float?
+  odometerAfter   Float?
+  taxpayerSignature String   @default("")
+  vehicleId       String
+  vehicle         Vehicle   @relation(fields: [vehicleId], references: [id])
+  userId          String
+  user            User      @relation(fields: [userId], references: [id])
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([vehicleId])
+  @@index([userId])
+  @@index([date])
+}
+
+model KsefConfig {
+  id            String    @id @default(cuid())
+  tokenEncrypted String   @default("")
+  environment   String    @default("TEST") // TEST or PROD
+  nip           String    @default("")
+  active        Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model KsefInvoice {
+  id              String    @id @default(cuid())
+  ksefNumber      String    @default("")
+  invoiceNumber   String    @default("")
+  issueDate       DateTime
+  sellerName      String    @default("")
+  sellerNip       String    @default("")
+  grossAmount     Float     @default(0)
+  netAmount       Float     @default(0)
+  vatAmount       Float     @default(0)
+  isFuel          Boolean   @default(false)
+  fuelLiters      Float?    
+  fuelPricePerLiter Float?  
+  rawData         String    @default("{}")
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([issueDate])
+  @@index([isFuel])
+}
+
+model BankStatement {
+  id              String    @id @default(cuid())
+  fileName        String    @default("")
+  cloudStoragePath String   @default("")
+  periodFrom      DateTime?
+  periodTo        DateTime?
+  importedAt      DateTime  @default(now())
+  transactions    BankTransaction[]
+}
+
+model BankTransaction {
+  id              String    @id @default(cuid())
+  operationDate   DateTime
+  valueDate       DateTime?
+  operationId     String    @default("")
+  operationType   String    @default("")
+  description     String    @default("")
+  amount          Float     @default(0)
+  balance         Float?    
+  isFuel          Boolean   @default(false)
+  stationName     String?   
+  location        String?   
+  statementId     String
+  statement       BankStatement @relation(fields: [statementId], references: [id], onDelete: Cascade)
+  createdAt       DateTime  @default(now())
+
+  @@index([statementId])
+  @@index([isFuel])
+  @@index([operationDate])
+}
+
+model FuelPurchase {
+  id              String    @id @default(cuid())
+  date            DateTime
+  amount          Float     @default(0)
+  liters          Float?    
+  pricePerLiter   Float?    
+  stationName     String    @default("")
+  source          String    @default("MANUAL") // MANUAL, BANK, KSEF
+  sourceId        String?   
+  vehicleId       String?
+  vehicle         Vehicle?  @relation(fields: [vehicleId], references: [id])
+  createdAt       DateTime  @default(now())
+
+  @@index([vehicleId])
+  @@index([date])
+}
+
+model SystemSettings {
+  id              String    @id @default(cuid())
+  key             String    @unique
+  value           String    @default("")
+  updatedAt       DateTime  @updatedAt
+}
+
+model BackupLog {
+  id              String    @id @default(cuid())
+  type            String    @default("MANUAL") // MANUAL or AUTO
+  status          String    @default("SUCCESS")
+  dataJson        String?   @db.Text
+  createdAt       DateTime  @default(now())
+}

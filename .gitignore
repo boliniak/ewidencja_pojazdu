@@ -1,0 +1,41 @@
+# Dependencies
+node_modules/
+.yarn/
+
+# Next.js
+.next/
+.build/
+out/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build
+dist/
+build/
+*.tsbuildinfo
+
+# Uploads & Backups
+uploads/
+backups/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Deploy output
+deploy/output/
