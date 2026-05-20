@@ -20,6 +20,21 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
+# === Podmiana modułów platformowych na lokalne ===
+# Replace S3/AWS with local storage
+COPY deploy/lib/local-storage.ts ./lib/local-storage.ts
+COPY deploy/lib/pdf-generator.ts ./lib/pdf-generator.ts
+COPY deploy/lib/llm-client.ts ./lib/llm-client.ts
+# Replace API routes with self-hosted versions
+COPY deploy/api-overrides/bank-upload-route.ts ./app/api/bank/upload/route.ts
+COPY deploy/api-overrides/reports-generate-pdf-route.ts ./app/api/reports/generate-pdf/route.ts
+# Remove platform-only files
+RUN rm -f lib/s3.ts lib/aws-config.ts
+# Remove Abacus script tag from layout
+RUN sed -i '/<script.*appllm-lib.js.*<\/script>/d' app/layout.tsx
+# Fix tsconfig - exclude deploy dir
+RUN sed -i 's/"exclude": \["node_modules"\]/"exclude": ["node_modules", "deploy"]/' tsconfig.json 2>/dev/null || true
+
 RUN npx prisma generate
 
 ENV NEXT_TELEMETRY_DISABLED=1
