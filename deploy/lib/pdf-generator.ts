@@ -4,10 +4,15 @@
  * Fallback: zwraca HTML z odpowiednim nagłówkiem
  */
 
-export async function generatePdfFromHtml(htmlContent: string): Promise<{ buffer: Buffer; isPdf: boolean }> {
-  // Próba 1: puppeteer-core
+// Dynamic require that bypasses webpack bundling
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const dynamicRequire = typeof __webpack_require__ === 'function'
+  ? __non_webpack_require__
+  : require;
+
+async function tryPuppeteerCore(htmlContent: string): Promise<Buffer | null> {
   try {
-    const puppeteer = require('puppeteer-core');
+    const puppeteer = dynamicRequire('puppeteer-core');
     const executablePath = process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium-browser';
     
     console.log('PDF: Launching puppeteer-core with:', executablePath);
@@ -33,14 +38,16 @@ export async function generatePdfFromHtml(htmlContent: string): Promise<{ buffer
     });
     await browser.close();
     console.log('PDF: Generated successfully via puppeteer-core');
-    return { buffer: Buffer.from(pdfBuffer), isPdf: true };
+    return Buffer.from(pdfBuffer);
   } catch (e: any) {
     console.error('PDF: puppeteer-core failed:', e?.message);
+    return null;
   }
+}
 
-  // Próba 2: puppeteer (pełna wersja)
+async function tryPuppeteer(htmlContent: string): Promise<Buffer | null> {
   try {
-    const puppeteer = require('puppeteer');
+    const puppeteer = dynamicRequire('puppeteer');
     console.log('PDF: Trying full puppeteer...');
     const browser = await puppeteer.launch({
       headless: 'new',
@@ -56,10 +63,21 @@ export async function generatePdfFromHtml(htmlContent: string): Promise<{ buffer
     });
     await browser.close();
     console.log('PDF: Generated successfully via puppeteer');
-    return { buffer: Buffer.from(pdfBuffer), isPdf: true };
+    return Buffer.from(pdfBuffer);
   } catch (e: any) {
     console.error('PDF: puppeteer failed:', e?.message);
+    return null;
   }
+}
+
+export async function generatePdfFromHtml(htmlContent: string): Promise<{ buffer: Buffer; isPdf: boolean }> {
+  // Próba 1: puppeteer-core
+  const pdf1 = await tryPuppeteerCore(htmlContent);
+  if (pdf1) return { buffer: pdf1, isPdf: true };
+
+  // Próba 2: puppeteer (pełna wersja)
+  const pdf2 = await tryPuppeteer(htmlContent);
+  if (pdf2) return { buffer: pdf2, isPdf: true };
 
   // Fallback: zwróć HTML (klient otworzy w nowej karcie i użytkownik wydrukuje Ctrl+P)
   console.log('PDF: Falling back to HTML output');
