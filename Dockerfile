@@ -24,7 +24,6 @@ RUN npx prisma generate
 
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_ENV=production
-# Dummy values for build time only
 ENV DATABASE_URL="postgresql://dummy:dummy@localhost:5432/dummy"
 ENV NEXTAUTH_SECRET="build-time-secret-not-used"
 ENV NEXTAUTH_URL="http://localhost:3000"
@@ -37,9 +36,8 @@ RUN yarn build
 FROM node:18-alpine AS runner
 RUN apk add --no-cache libc6-compat openssl curl postgresql-client
 
-# Zainstaluj Chromium do generowania PDF (opcjonalne)
-RUN apk add --no-cache chromium nss freetype harfbuzz ca-certificates ttf-freefont \
-    && echo "Chromium installed for PDF generation"
+# Chromium do generowania PDF
+RUN apk add --no-cache chromium nss freetype harfbuzz ca-certificates ttf-freefont
 
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
@@ -52,27 +50,27 @@ ENV NEXT_TELEMETRY_DISABLED=1
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 
-# Copy built app
+# Copy built Next.js app
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 
-# Copy Prisma schema + client for db push at startup
+# Copy Prisma schema for db push
 COPY --from=builder /app/prisma ./prisma
-COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
-COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
-COPY --from=builder /app/node_modules/prisma ./node_modules/prisma
-COPY --from=builder /app/node_modules/bcryptjs ./node_modules/bcryptjs
 
-# Install puppeteer-core for PDF generation
-RUN yarn add puppeteer-core@22.15.0 --ignore-scripts 2>/dev/null || true
+# Copy FULL node_modules from builder (needed for prisma db push + seed + puppeteer)
+# standalone output only includes minimal deps, but we need prisma CLI + engines
+COPY --from=builder /app/node_modules ./node_modules
+
+# Copy seed script
+COPY --from=builder /app/scripts ./scripts
 
 COPY entrypoint.sh ./entrypoint.sh
 RUN chmod +x ./entrypoint.sh
 
-# Create directories
+# Create directories and fix permissions
 RUN mkdir -p /app/uploads /app/backups \
-    && chown -R nextjs:nodejs /app/uploads /app/backups /app
+    && chown -R nextjs:nodejs /app/uploads /app/backups
 
 USER nextjs
 
