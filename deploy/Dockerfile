@@ -80,7 +80,7 @@ COPY --from=builder /app/node_modules ./node_modules
 # Copy seed script
 COPY --from=builder /app/scripts ./scripts
 
-COPY entrypoint.sh ./entrypoint.sh
+COPY deploy/entrypoint.sh ./entrypoint.sh
 RUN chmod +x ./entrypoint.sh
 
 # Create directories and fix permissions
