@@ -14,5 +14,5 @@ export async function PUT(request: Request, { params }: { params: { id: string }
       data: { isFuel: body?.isFuel ?? false, stationName: body?.stationName ?? null },
     });
     return NextResponse.json(tx);
-  } catch { return NextResponse.json({ error: 'B\u0142\u0105d' }, { status: 500 }); }
+  } catch { return NextResponse.json({ error: 'Błąd' }, { status: 500 }); }
 }

@@ -26,7 +26,7 @@ export function SettingsClient() {
 
   const saveSettings = async () => {
     const res = await fetch('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(settings) });
-    if (res.ok) toast.success('Ustawienia zapisane'); else toast.error('B\u0142\u0105d');
+    if (res.ok) toast.success('Ustawienia zapisane'); else toast.error('Błąd');
   };
 
   const exportData = async () => {
@@ -43,7 +43,7 @@ export function SettingsClient() {
       a.remove();
       toast.success('Backup wyeksportowany');
       fetch('/api/backup/logs').then(r => r.json()).then(d => setBackupLogs(d ?? []));
-    } catch { toast.error('B\u0142\u0105d'); }
+    } catch { toast.error('Błąd'); }
   };
 
   const importData = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -55,10 +55,10 @@ export function SettingsClient() {
       const res = await fetch('/api/backup/import', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
       const result = await res.json();
       if (res.ok) {
-        toast.success(`Import zako\u0144czony: ${result?.imported?.vehicles ?? 0} pojazd\u00f3w, ${result?.imported?.settings ?? 0} ustawie\u0144`);
+        toast.success(`Import zakończony: ${result?.imported?.vehicles ?? 0} pojazdów, ${result?.imported?.settings ?? 0} ustawień`);
         fetch('/api/backup/logs').then(r => r.json()).then(d => setBackupLogs(d ?? []));
-      } else toast.error(result?.error ?? 'B\u0142\u0105d importu');
-    } catch { toast.error('B\u0142\u0105d parsowania pliku'); }
+      } else toast.error(result?.error ?? 'Błąd importu');
+    } catch { toast.error('Błąd parsowania pliku'); }
     if (fileRef.current) fileRef.current.value = '';
   };
 
@@ -75,7 +75,7 @@ export function SettingsClient() {
 
       <Tabs defaultValue="general">
         <TabsList className="mb-4">
-          <TabsTrigger value="general"><Settings className="w-4 h-4 mr-1" /> Og\u00f3lne</TabsTrigger>
+          <TabsTrigger value="general"><Settings className="w-4 h-4 mr-1" /> Ogólne</TabsTrigger>
           <TabsTrigger value="backup"><Database className="w-4 h-4 mr-1" /> Backup</TabsTrigger>
         </TabsList>
 
@@ -83,7 +83,7 @@ export function SettingsClient() {
           <Card style={{boxShadow: 'var(--shadow-sm)'}}>
             <CardHeader>
               <CardTitle className="text-lg">Parametry systemu</CardTitle>
-              <CardDescription>Ustawienia og\u00f3lne i parametry weryfikacji spalania</CardDescription>
+              <CardDescription>Ustawienia ogólne i parametry weryfikacji spalania</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -116,7 +116,7 @@ export function SettingsClient() {
             <Card style={{boxShadow: 'var(--shadow-sm)'}}>
               <CardHeader>
                 <CardTitle className="text-lg flex items-center gap-2"><Download className="w-5 h-5" /> Eksport danych</CardTitle>
-                <CardDescription>Pobierz kopi\u0119 zapasow\u0105 wszystkich danych</CardDescription>
+                <CardDescription>Pobierz kopię zapasową wszystkich danych</CardDescription>
               </CardHeader>
               <CardContent>
                 <Button onClick={exportData} className="w-full"><Download className="w-4 h-4 mr-1" /> Eksportuj backup (JSON)</Button>
@@ -125,21 +125,21 @@ export function SettingsClient() {
             <Card style={{boxShadow: 'var(--shadow-sm)'}}>
               <CardHeader>
                 <CardTitle className="text-lg flex items-center gap-2"><Upload className="w-5 h-5" /> Import danych</CardTitle>
-                <CardDescription>Przywr\u00f3\u0107 dane z kopii zapasowej</CardDescription>
+                <CardDescription>Przywróć dane z kopii zapasowej</CardDescription>
               </CardHeader>
               <CardContent>
                 <input ref={fileRef} type="file" accept=".json" className="hidden" onChange={importData} />
                 <Button variant="outline" onClick={() => fileRef?.current?.click?.()} className="w-full" disabled={!isAdmin}>
                   <Upload className="w-4 h-4 mr-1" /> Importuj backup (JSON)
                 </Button>
-                {!isAdmin && <p className="text-xs text-muted-foreground mt-2">Tylko administrator mo\u017ce importowa\u0107 dane</p>}
+                {!isAdmin && <p className="text-xs text-muted-foreground mt-2">Tylko administrator może importować dane</p>}
               </CardContent>
             </Card>
           </div>
 
           <Card style={{boxShadow: 'var(--shadow-sm)'}}>
             <CardHeader>
-              <CardTitle className="text-lg flex items-center gap-2"><History className="w-5 h-5" /> Historia backup\u00f3w</CardTitle>
+              <CardTitle className="text-lg flex items-center gap-2"><History className="w-5 h-5" /> Historia backupów</CardTitle>
             </CardHeader>
             <CardContent className="p-0">
               <Table>

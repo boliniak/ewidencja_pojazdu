@@ -18,7 +18,7 @@ export async function PUT(request: Request, { params }: { params: { id: string }
       },
     });
     return NextResponse.json(invoice);
-  } catch { return NextResponse.json({ error: 'B\u0142\u0105d' }, { status: 500 }); }
+  } catch { return NextResponse.json({ error: 'Błąd' }, { status: 500 }); }
 }
 
 export async function DELETE(request: Request, { params }: { params: { id: string } }) {
@@ -27,5 +27,5 @@ export async function DELETE(request: Request, { params }: { params: { id: strin
     if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     await prisma.ksefInvoice.delete({ where: { id: params?.id } });
     return NextResponse.json({ success: true });
-  } catch { return NextResponse.json({ error: 'B\u0142\u0105d' }, { status: 500 }); }
+  } catch { return NextResponse.json({ error: 'Błąd' }, { status: 500 }); }
 }

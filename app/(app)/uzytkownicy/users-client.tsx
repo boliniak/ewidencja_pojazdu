@@ -35,39 +35,39 @@ export function UsersClient() {
     const payload = editUser ? { ...form, password: form.password || undefined } : form;
     const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
     const data = await res.json();
-    if (!res.ok) { toast.error(data?.error ?? 'B\u0142\u0105d'); return; }
-    toast.success(editUser ? 'Zaktualizowano' : 'Dodano u\u017cytkownika');
+    if (!res.ok) { toast.error(data?.error ?? 'Błąd'); return; }
+    toast.success(editUser ? 'Zaktualizowano' : 'Dodano użytkownika');
     setDialogOpen(false); fetchUsers();
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Usun\u0105\u0107 u\u017cytkownika?')) return;
+    if (!confirm('Usunąć użytkownika?')) return;
     await fetch(`/api/users/${id}`, { method: 'DELETE' });
-    toast.success('Usuni\u0119to'); fetchUsers();
+    toast.success('Usunięto'); fetchUsers();
   };
 
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-display font-bold tracking-tight">U\u017cytkownicy</h1>
-          <p className="text-muted-foreground">Zarz\u0105dzanie u\u017cytkownikami systemu (maks. 10)</p>
+          <h1 className="text-2xl font-display font-bold tracking-tight">Użytkownicy</h1>
+          <p className="text-muted-foreground">Zarządzanie użytkownikami systemu (maks. 10)</p>
         </div>
         {isAdmin && <Button onClick={openNew} disabled={(users?.length ?? 0) >= 10}><Plus className="w-4 h-4 mr-1" /> Dodaj</Button>}
       </div>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent>
-          <DialogHeader><DialogTitle>{editUser ? 'Edytuj' : 'Nowy u\u017cytkownik'}</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{editUser ? 'Edytuj' : 'Nowy użytkownik'}</DialogTitle></DialogHeader>
           <div className="space-y-4">
-            <div className="space-y-2"><Label>Imi\u0119 i nazwisko *</Label><Input value={form.name} onChange={(e: any) => setForm(p => ({...(p ?? {}), name: e?.target?.value ?? ''}))} /></div>
+            <div className="space-y-2"><Label>Imię i nazwisko *</Label><Input value={form.name} onChange={(e: any) => setForm(p => ({...(p ?? {}), name: e?.target?.value ?? ''}))} /></div>
             <div className="space-y-2"><Label>Email *</Label><Input type="email" value={form.email} onChange={(e: any) => setForm(p => ({...(p ?? {}), email: e?.target?.value ?? ''}))} /></div>
-            <div className="space-y-2"><Label>{editUser ? 'Nowe has\u0142o (puste = bez zmian)' : 'Has\u0142o *'}</Label><Input type="password" value={form.password} onChange={(e: any) => setForm(p => ({...(p ?? {}), password: e?.target?.value ?? ''}))} /></div>
+            <div className="space-y-2"><Label>{editUser ? 'Nowe hasło (puste = bez zmian)' : 'Hasło *'}</Label><Input type="password" value={form.password} onChange={(e: any) => setForm(p => ({...(p ?? {}), password: e?.target?.value ?? ''}))} /></div>
             <div className="space-y-2">
               <Label>Rola</Label>
               <Select value={form.role} onValueChange={(v: string) => setForm(p => ({...(p ?? {}), role: v}))}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent><SelectItem value="USER">U\u017cytkownik</SelectItem><SelectItem value="ADMIN">Administrator</SelectItem></SelectContent>
+                <SelectContent><SelectItem value="USER">Użytkownik</SelectItem><SelectItem value="ADMIN">Administrator</SelectItem></SelectContent>
               </Select>
             </div>
             <div className="flex justify-end gap-2">
@@ -82,17 +82,17 @@ export function UsersClient() {
         <CardContent className="p-0">
           <Table>
             <TableHeader><TableRow>
-              <TableHead>Imi\u0119 i nazwisko</TableHead><TableHead>Email</TableHead><TableHead>Rola</TableHead><TableHead>Data utworzenia</TableHead>
+              <TableHead>Imię i nazwisko</TableHead><TableHead>Email</TableHead><TableHead>Rola</TableHead><TableHead>Data utworzenia</TableHead>
               {isAdmin && <TableHead className="text-right">Akcje</TableHead>}
             </TableRow></TableHeader>
             <TableBody>
               {loading ? <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">Wczytywanie...</TableCell></TableRow> :
-              (users?.length ?? 0) === 0 ? <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">Brak u\u017cytkownik\u00f3w</TableCell></TableRow> :
+              (users?.length ?? 0) === 0 ? <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">Brak użytkowników</TableCell></TableRow> :
               users?.map?.((u: any) => (
                 <TableRow key={u?.id}>
                   <TableCell className="font-medium">{u?.name}</TableCell>
                   <TableCell>{u?.email}</TableCell>
-                  <TableCell><Badge variant={u?.role === 'ADMIN' ? 'default' : 'secondary'}>{u?.role === 'ADMIN' ? 'Admin' : 'U\u017cytkownik'}</Badge></TableCell>
+                  <TableCell><Badge variant={u?.role === 'ADMIN' ? 'default' : 'secondary'}>{u?.role === 'ADMIN' ? 'Admin' : 'Użytkownik'}</Badge></TableCell>
                   <TableCell className="text-sm">{u?.createdAt ? new Date(u.createdAt).toLocaleDateString('pl-PL') : '-'}</TableCell>
                   {isAdmin && <TableCell className="text-right">
                     <Button variant="ghost" size="icon-sm" onClick={() => openEdit(u)}><Pencil className="w-4 h-4" /></Button>

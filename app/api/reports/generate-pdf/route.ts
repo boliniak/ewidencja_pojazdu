@@ -3,7 +3,6 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/prisma';
-import { generatePdfFromHtml } from '@/lib/pdf-generator';
 
 export async function POST(request: Request) {
   try {
@@ -58,7 +57,7 @@ export async function POST(request: Request) {
   <h2>Okres: ${periodLabel} | Pojazd: ${vehicle?.registrationNumber ?? ''} ${vehicle?.brand ?? ''} ${vehicle?.model ?? ''}</h2>
   <div class="meta">
     <div>${companyName ? `Firma: ${companyName}` : ''}${companyNip ? ` | NIP: ${companyNip}` : ''}</div>
-    <div>Stan pocz\u0105tkowy: ${entries?.[0]?.odometerBefore?.toLocaleString?.('pl-PL') ?? vehicle?.odometerStart ?? 0} km</div>
+    <div>Stan początkowy: ${entries?.[0]?.odometerBefore?.toLocaleString?.('pl-PL') ?? vehicle?.odometerStart ?? 0} km</div>
   </div>
   <table>
     <thead><tr>
@@ -85,16 +84,50 @@ export async function POST(request: Request) {
   </div>
 </body></html>`;
 
-    const pdfBuffer = await generatePdfFromHtml(html_content);
-
-    return new NextResponse(pdfBuffer, {
-      headers: {
-        'Content-Type': 'application/pdf',
-        'Content-Disposition': `attachment; filename="ewidencja_${vehicle?.registrationNumber ?? 'pojazd'}_${periodLabel}.pdf"`,
-      },
+    // Generate PDF
+    const createResponse = await fetch('https://apps.abacus.ai/api/createConvertHtmlToPdfRequest', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        deployment_token: process.env.ABACUSAI_API_KEY,
+        html_content,
+        pdf_options: { format: 'A4', landscape: true, margin: { top: '15mm', bottom: '15mm', left: '10mm', right: '10mm' }, print_background: true },
+        base_url: process.env.NEXTAUTH_URL ?? '',
+      }),
     });
+
+    if (!createResponse.ok) return NextResponse.json({ error: 'Błąd generowania PDF' }, { status: 500 });
+    const { request_id } = await createResponse.json();
+    if (!request_id) return NextResponse.json({ error: 'Brak request_id' }, { status: 500 });
+
+    let attempts = 0;
+    while (attempts < 120) {
+      await new Promise(r => setTimeout(r, 1000));
+      const statusRes = await fetch('https://apps.abacus.ai/api/getConvertHtmlToPdfStatus', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ request_id, deployment_token: process.env.ABACUSAI_API_KEY }),
+      });
+      const statusResult = await statusRes.json();
+      const status = statusResult?.status ?? 'FAILED';
+      if (status === 'SUCCESS') {
+        if (statusResult?.result?.result) {
+          const pdfBuffer = Buffer.from(statusResult.result.result, 'base64');
+          return new NextResponse(pdfBuffer, {
+            headers: {
+              'Content-Type': 'application/pdf',
+              'Content-Disposition': `attachment; filename="ewidencja_${vehicle?.registrationNumber ?? 'pojazd'}_${periodLabel}.pdf"`,
+            },
+          });
+        }
+        return NextResponse.json({ error: 'PDF wygenerowany ale brak danych' }, { status: 500 });
+      }
+      if (status === 'FAILED') return NextResponse.json({ error: 'Błąd generowania PDF' }, { status: 500 });
+      attempts++;
+    }
+    return NextResponse.json({ error: 'Przekroczono czas generowania' }, { status: 500 });
   } catch (error: any) {
     console.error('Report PDF error:', error);
-    return NextResponse.json({ error: 'B\u0142\u0105d generowania raportu' }, { status: 500 });
+    return NextResponse.json({ error: 'Błąd' }, { status: 500 });
   }
 }

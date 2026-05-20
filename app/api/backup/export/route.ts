@@ -30,6 +30,6 @@ export async function GET() {
     return NextResponse.json(backup);
   } catch (error: any) {
     console.error(error);
-    return NextResponse.json({ error: 'B\u0142\u0105d eksportu' }, { status: 500 });
+    return NextResponse.json({ error: 'Błąd eksportu' }, { status: 500 });
   }
 }

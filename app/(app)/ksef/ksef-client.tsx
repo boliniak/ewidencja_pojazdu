@@ -31,12 +31,12 @@ export function KsefClient() {
 
   const saveConfig = async () => {
     const res = await fetch('/api/ksef/config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(configForm) });
-    if (res.ok) { toast.success('Konfiguracja zapisana'); fetchConfig(); } else { toast.error('B\u0142\u0105d'); }
+    if (res.ok) { toast.success('Konfiguracja zapisana'); fetchConfig(); } else { toast.error('Błąd'); }
   };
 
   const addInvoice = async () => {
     const res = await fetch('/api/ksef/invoices', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) });
-    if (res.ok) { toast.success('Faktura dodana'); setDialogOpen(false); fetchInvoices(); } else { toast.error('B\u0142\u0105d'); }
+    if (res.ok) { toast.success('Faktura dodana'); setDialogOpen(false); fetchInvoices(); } else { toast.error('Błąd'); }
   };
 
   const toggleFuel = async (inv: any) => {
@@ -45,7 +45,7 @@ export function KsefClient() {
   };
 
   const deleteInvoice = async (id: string) => {
-    if (!confirm('Usun\u0105\u0107?')) return;
+    if (!confirm('Usunąć?')) return;
     await fetch(`/api/ksef/invoices/${id}`, { method: 'DELETE' });
     fetchInvoices();
   };
@@ -59,8 +59,8 @@ export function KsefClient() {
   return (
     <div>
       <div className="mb-6">
-        <h1 className="text-2xl font-display font-bold tracking-tight">KSeF \u2013 Faktury VAT</h1>
-        <p className="text-muted-foreground">Integracja z Krajowym Systemem e-Faktur i zarz\u0105dzanie fakturami</p>
+        <h1 className="text-2xl font-display font-bold tracking-tight">KSeF – Faktury VAT</h1>
+        <p className="text-muted-foreground">Integracja z Krajowym Systemem e-Faktur i zarządzanie fakturami</p>
       </div>
 
       <Tabs value={tab} onValueChange={setTab}>
@@ -71,8 +71,8 @@ export function KsefClient() {
 
         <TabsContent value="invoices">
           <div className="flex justify-between items-center mb-4">
-            <p className="text-sm text-muted-foreground">Zarz\u0105dzaj fakturami i oznaczaj faktury paliwowe</p>
-            <Button onClick={openNew}><Plus className="w-4 h-4 mr-1" /> Dodaj faktur\u0119</Button>
+            <p className="text-sm text-muted-foreground">Zarządzaj fakturami i oznaczaj faktury paliwowe</p>
+            <Button onClick={openNew}><Plus className="w-4 h-4 mr-1" /> Dodaj fakturę</Button>
           </div>
 
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
@@ -126,7 +126,7 @@ export function KsefClient() {
                       <TableCell className="font-mono text-sm">{inv?.invoiceNumber || inv?.ksefNumber || '-'}</TableCell>
                       <TableCell>{inv?.issueDate ? new Date(inv.issueDate).toLocaleDateString('pl-PL') : '-'}</TableCell>
                       <TableCell>{inv?.sellerName ?? '-'}</TableCell>
-                      <TableCell className="text-right font-mono">{inv?.grossAmount?.toFixed?.(2)} z\u0142</TableCell>
+                      <TableCell className="text-right font-mono">{inv?.grossAmount?.toFixed?.(2)} zł</TableCell>
                       <TableCell>
                         <button onClick={() => toggleFuel(inv)} className="cursor-pointer">
                           {inv?.isFuel ? <Badge className="bg-green-100 text-green-700"><Fuel className="w-3 h-3 mr-1" />Tak</Badge> : <Badge variant="secondary">Nie</Badge>}
@@ -148,7 +148,7 @@ export function KsefClient() {
           <Card style={{boxShadow: 'var(--shadow-sm)'}}>
             <CardHeader>
               <CardTitle className="text-lg">Konfiguracja KSeF</CardTitle>
-              <CardDescription>Wprowad\u017a dane dost\u0119pu do Krajowego Systemu e-Faktur</CardDescription>
+              <CardDescription>Wprowadź dane dostępu do Krajowego Systemu e-Faktur</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex items-center gap-3">
@@ -159,7 +159,7 @@ export function KsefClient() {
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2"><Label>NIP firmy</Label><Input value={configForm.nip} onChange={(e: any) => setConfigForm(p => ({...(p ?? {}), nip: e?.target?.value ?? ''}))} placeholder="1234567890" /></div>
                 <div className="space-y-2">
-                  <Label>\u015arodowisko</Label>
+                  <Label>Środowisko</Label>
                   <Select value={configForm.environment} onValueChange={(v: string) => setConfigForm(p => ({...(p ?? {}), environment: v}))}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent><SelectItem value="TEST">Testowe</SelectItem><SelectItem value="PROD">Produkcyjne</SelectItem></SelectContent>
@@ -171,7 +171,7 @@ export function KsefClient() {
                 <Input type="password" value={configForm.token} onChange={(e: any) => setConfigForm(p => ({...(p ?? {}), token: e?.target?.value ?? ''}))} placeholder={config?.hasToken ? '******** (zapisany)' : 'Wklej token'} />
                 <p className="text-xs text-muted-foreground">Token jest przechowywany w zaszyfrowanej formie w bazie danych</p>
               </div>
-              {isAdmin && <Button onClick={saveConfig}><Save className="w-4 h-4 mr-1" /> Zapisz konfiguracj\u0119</Button>}
+              {isAdmin && <Button onClick={saveConfig}><Save className="w-4 h-4 mr-1" /> Zapisz konfigurację</Button>}
             </CardContent>
           </Card>
         </TabsContent>

@@ -9,7 +9,7 @@ export async function PUT(request: Request, { params }: { params: { id: string }
   try {
     const session = await getServerSession(authOptions);
     if (!session || (session.user as any)?.role !== 'ADMIN') {
-      return NextResponse.json({ error: 'Brak uprawnie\u0144' }, { status: 403 });
+      return NextResponse.json({ error: 'Brak uprawnień' }, { status: 403 });
     }
     const body = await request.json();
     const data: any = {};
@@ -20,7 +20,7 @@ export async function PUT(request: Request, { params }: { params: { id: string }
     const user = await prisma.user.update({ where: { id: params?.id }, data });
     return NextResponse.json({ id: user.id, name: user.name, email: user.email, role: user.role });
   } catch (error: any) {
-    return NextResponse.json({ error: 'B\u0142\u0105d' }, { status: 500 });
+    return NextResponse.json({ error: 'Błąd' }, { status: 500 });
   }
 }
 
@@ -28,11 +28,11 @@ export async function DELETE(request: Request, { params }: { params: { id: strin
   try {
     const session = await getServerSession(authOptions);
     if (!session || (session.user as any)?.role !== 'ADMIN') {
-      return NextResponse.json({ error: 'Brak uprawnie\u0144' }, { status: 403 });
+      return NextResponse.json({ error: 'Brak uprawnień' }, { status: 403 });
     }
     await prisma.user.delete({ where: { id: params?.id } });
     return NextResponse.json({ success: true });
   } catch (error: any) {
-    return NextResponse.json({ error: 'B\u0142\u0105d' }, { status: 500 });
+    return NextResponse.json({ error: 'Błąd' }, { status: 500 });
   }
 }

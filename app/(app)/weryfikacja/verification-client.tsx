@@ -45,18 +45,18 @@ export function VerificationClient() {
   };
 
   const months = [
-    { v: 'all', l: 'Ca\u0142y rok' },
-    { v: '1', l: 'Stycze\u0144' }, { v: '2', l: 'Luty' }, { v: '3', l: 'Marzec' },
-    { v: '4', l: 'Kwiecie\u0144' }, { v: '5', l: 'Maj' }, { v: '6', l: 'Czerwiec' },
-    { v: '7', l: 'Lipiec' }, { v: '8', l: 'Sierpie\u0144' }, { v: '9', l: 'Wrzesie\u0144' },
-    { v: '10', l: 'Pa\u017adziernik' }, { v: '11', l: 'Listopad' }, { v: '12', l: 'Grudzie\u0144' },
+    { v: 'all', l: 'Cały rok' },
+    { v: '1', l: 'Styczeń' }, { v: '2', l: 'Luty' }, { v: '3', l: 'Marzec' },
+    { v: '4', l: 'Kwiecień' }, { v: '5', l: 'Maj' }, { v: '6', l: 'Czerwiec' },
+    { v: '7', l: 'Lipiec' }, { v: '8', l: 'Sierpień' }, { v: '9', l: 'Wrzesień' },
+    { v: '10', l: 'Październik' }, { v: '11', l: 'Listopad' }, { v: '12', l: 'Grudzień' },
   ];
 
   return (
     <div>
       <div className="mb-6">
         <h1 className="text-2xl font-display font-bold tracking-tight">Weryfikacja spalania</h1>
-        <p className="text-muted-foreground">Por\u00f3wnanie kilometr\u00f3w z ewidencji z ilo\u015bci\u0105 zatankowanego paliwa</p>
+        <p className="text-muted-foreground">Porównanie kilometrów z ewidencji z ilością zatankowanego paliwa</p>
       </div>
 
       <div className="flex flex-wrap gap-3 mb-6">
@@ -67,7 +67,7 @@ export function VerificationClient() {
             {months?.map?.((m: any) => <SelectItem key={m?.v} value={m?.v}>{m?.l}</SelectItem>) ?? []}
           </SelectContent>
         </Select>
-        <Button variant="outline" onClick={fetchData}><RefreshCw className="w-4 h-4 mr-1" /> Od\u015bwie\u017c</Button>
+        <Button variant="outline" onClick={fetchData}><RefreshCw className="w-4 h-4 mr-1" /> Odśwież</Button>
       </div>
 
       {loading ? (
@@ -78,7 +78,7 @@ export function VerificationClient() {
         <Card style={{boxShadow: 'var(--shadow-sm)'}}>
           <CardContent className="py-12 text-center text-muted-foreground">
             <Car className="w-12 h-12 mx-auto mb-4 opacity-30" />
-            <p>Brak aktywnych pojazd\u00f3w do weryfikacji</p>
+            <p>Brak aktywnych pojazdów do weryfikacji</p>
           </CardContent>
         </Card>
       ) : (
@@ -107,17 +107,17 @@ export function VerificationClient() {
                       </div>
                       <div className="space-y-2">
                         <div className="flex justify-between text-sm"><span className="text-muted-foreground">Zatankowano</span><span className="font-mono font-bold">{r?.totalLiters?.toFixed?.(1) ?? '0'} l</span></div>
-                        <div className="flex justify-between text-sm"><span className="text-muted-foreground">Koszt paliwa</span><span className="font-mono">{r?.totalFuelCost?.toFixed?.(2) ?? '0'} z\u0142</span></div>
+                        <div className="flex justify-between text-sm"><span className="text-muted-foreground">Koszt paliwa</span><span className="font-mono">{r?.totalFuelCost?.toFixed?.(2) ?? '0'} zł</span></div>
                       </div>
                     </div>
                     <div className="mt-4 pt-4 border-t">
                       <div className="flex items-center justify-between">
-                        <span className="text-sm font-medium">\u015arednie spalanie</span>
+                        <span className="text-sm font-medium">Średnie spalanie</span>
                         <span className={`text-xl font-mono font-bold ${sc?.color}`}>
-                          {r?.avgConsumption?.toFixed?.(1) ?? '\u2014'} l/100km
+                          {r?.avgConsumption?.toFixed?.(1) ?? '—'} l/100km
                         </span>
                       </div>
-                      <p className="text-xs text-muted-foreground mt-1">Norma: {r?.minConsumption}\u2013{r?.maxConsumption} l/100km</p>
+                      <p className="text-xs text-muted-foreground mt-1">Norma: {r?.minConsumption}–{r?.maxConsumption} l/100km</p>
                       {r?.avgConsumption !== null && r?.avgConsumption !== undefined && (
                         <div className="mt-2 h-2 bg-muted rounded-full overflow-hidden">
                           <div

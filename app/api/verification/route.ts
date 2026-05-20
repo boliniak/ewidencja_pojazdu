@@ -74,6 +74,6 @@ export async function GET(request: Request) {
     return NextResponse.json(results);
   } catch (error: any) {
     console.error(error);
-    return NextResponse.json({ error: 'B\u0142\u0105d' }, { status: 500 });
+    return NextResponse.json({ error: 'Błąd' }, { status: 500 });
   }
 }

@@ -1,0 +1,79 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: ewidencja_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER:-ewidencja}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-ewidencja_secure_pass_2024}
+      POSTGRES_DB: ${DB_NAME:-ewidencja_przebiegu}
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-ewidencja}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ewidencja_app
+    restart: unless-stopped
+    ports:
+      - "${APP_PORT:-3000}:3000"
+    environment:
+      DATABASE_URL: postgresql://${DB_USER:-ewidencja}:${DB_PASSWORD:-ewidencja_secure_pass_2024}@db:5432/${DB_NAME:-ewidencja_przebiegu}
+      NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3000}
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:-zmien-na-losowy-ciag-32-znakow-min}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_API_URL: ${OPENAI_API_URL:-https://api.openai.com/v1}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
+    volumes:
+      - uploads_data:/app/uploads
+      - backups_data:/app/backups
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # Automatyczny backup bazy danych co 24h
+  db-backup:
+    image: postgres:16-alpine
+    container_name: ewidencja_backup
+    restart: unless-stopped
+    environment:
+      PGHOST: db
+      PGUSER: ${DB_USER:-ewidencja}
+      PGPASSWORD: ${DB_PASSWORD:-ewidencja_secure_pass_2024}
+      PGDATABASE: ${DB_NAME:-ewidencja_przebiegu}
+    volumes:
+      - backups_data:/backups
+    entrypoint: |
+      sh -c '
+        echo "Backup service started"
+        while true; do
+          TIMESTAMP=$$(date +%Y%m%d_%H%M%S)
+          echo "Creating backup: backup_$$TIMESTAMP.sql"
+          pg_dump -Fc > /backups/backup_$$TIMESTAMP.sql
+          # Keep last 30 backups
+          ls -t /backups/backup_*.sql 2>/dev/null | tail -n +31 | xargs -r rm
+          echo "Backup completed. Next in 24h."
+          sleep 86400
+        done
+      '
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+    driver: local
+  uploads_data:
+    driver: local
+  backups_data:
+    driver: local

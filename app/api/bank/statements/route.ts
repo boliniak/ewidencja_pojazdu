@@ -13,5 +13,5 @@ export async function GET() {
       orderBy: { importedAt: 'desc' },
     });
     return NextResponse.json(statements ?? []);
-  } catch { return NextResponse.json({ error: 'B\u0142\u0105d' }, { status: 500 }); }
+  } catch { return NextResponse.json({ error: 'Błąd' }, { status: 500 }); }
 }

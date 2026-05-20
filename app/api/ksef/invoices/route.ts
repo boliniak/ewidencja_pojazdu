@@ -13,7 +13,7 @@ export async function GET(request: Request) {
     const where: any = fuelOnly ? { isFuel: true } : {};
     const invoices = await prisma.ksefInvoice.findMany({ where, orderBy: { issueDate: 'desc' } });
     return NextResponse.json(invoices ?? []);
-  } catch { return NextResponse.json({ error: 'B\u0142\u0105d' }, { status: 500 }); }
+  } catch { return NextResponse.json({ error: 'Błąd' }, { status: 500 }); }
 }
 
 export async function POST(request: Request) {
@@ -41,6 +41,6 @@ export async function POST(request: Request) {
     return NextResponse.json(invoice);
   } catch (error: any) {
     console.error(error);
-    return NextResponse.json({ error: 'B\u0142\u0105d' }, { status: 500 });
+    return NextResponse.json({ error: 'Błąd' }, { status: 500 });
   }
 }

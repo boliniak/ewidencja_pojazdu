@@ -10,5 +10,5 @@ export async function GET() {
     if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     const logs = await prisma.backupLog.findMany({ orderBy: { createdAt: 'desc' }, take: 50 });
     return NextResponse.json(logs ?? []);
-  } catch { return NextResponse.json({ error: 'B\u0142\u0105d' }, { status: 500 }); }
+  } catch { return NextResponse.json({ error: 'Błąd' }, { status: 500 }); }
 }

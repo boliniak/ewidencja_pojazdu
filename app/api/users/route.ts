@@ -16,7 +16,7 @@ export async function GET() {
     return NextResponse.json(users ?? []);
   } catch (error: any) {
     console.error(error);
-    return NextResponse.json({ error: 'B\u0142\u0105d' }, { status: 500 });
+    return NextResponse.json({ error: 'Błąd' }, { status: 500 });
   }
 }
 
@@ -24,21 +24,21 @@ export async function POST(request: Request) {
   try {
     const session = await getServerSession(authOptions);
     if (!session || (session.user as any)?.role !== 'ADMIN') {
-      return NextResponse.json({ error: 'Brak uprawnie\u0144' }, { status: 403 });
+      return NextResponse.json({ error: 'Brak uprawnień' }, { status: 403 });
     }
     const body = await request.json();
     if (!body?.email || !body?.password || !body?.name) {
-      return NextResponse.json({ error: 'Wype\u0142nij wymagane pola' }, { status: 400 });
+      return NextResponse.json({ error: 'Wypełnij wymagane pola' }, { status: 400 });
     }
     const count = await prisma.user.count();
-    if (count >= 10) return NextResponse.json({ error: 'Maks. 10 u\u017cytkownik\u00f3w' }, { status: 400 });
+    if (count >= 10) return NextResponse.json({ error: 'Maks. 10 użytkowników' }, { status: 400 });
     const hashed = await bcrypt.hash(body.password, 12);
     const user = await prisma.user.create({
       data: { email: body.email, password: hashed, name: body.name, role: body?.role ?? 'USER' },
     });
     return NextResponse.json({ id: user.id, name: user.name, email: user.email, role: user.role });
   } catch (error: any) {
-    if (error?.code === 'P2002') return NextResponse.json({ error: 'Email ju\u017c istnieje' }, { status: 400 });
-    return NextResponse.json({ error: 'B\u0142\u0105d' }, { status: 500 });
+    if (error?.code === 'P2002') return NextResponse.json({ error: 'Email już istnieje' }, { status: 400 });
+    return NextResponse.json({ error: 'Błąd' }, { status: 500 });
   }
 }

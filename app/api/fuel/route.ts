@@ -14,7 +14,7 @@ export async function GET(request: Request) {
     if (vehicleId) where.vehicleId = vehicleId;
     const purchases = await prisma.fuelPurchase.findMany({ where, include: { vehicle: true }, orderBy: { date: 'desc' } });
     return NextResponse.json(purchases ?? []);
-  } catch { return NextResponse.json({ error: 'B\u0142\u0105d' }, { status: 500 }); }
+  } catch { return NextResponse.json({ error: 'Błąd' }, { status: 500 }); }
 }
 
 export async function POST(request: Request) {
@@ -35,5 +35,5 @@ export async function POST(request: Request) {
       },
     });
     return NextResponse.json(purchase);
-  } catch { return NextResponse.json({ error: 'B\u0142\u0105d' }, { status: 500 }); }
+  } catch { return NextResponse.json({ error: 'Błąd' }, { status: 500 }); }
 }

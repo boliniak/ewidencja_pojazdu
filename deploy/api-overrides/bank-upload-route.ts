@@ -3,7 +3,8 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/prisma';
-import { generatePresignedUploadUrl } from '@/lib/s3';
+import { saveFile } from '@/lib/local-storage';
+import { callLlm } from '@/lib/llm-client';
 
 export async function POST(request: Request) {
   try {
@@ -14,34 +15,20 @@ export async function POST(request: Request) {
     const file = formData.get('file') as File;
     if (!file) return NextResponse.json({ error: 'Brak pliku' }, { status: 400 });
 
-    // Upload to S3
-    const { uploadUrl, cloud_storage_path } = await generatePresignedUploadUrl(file.name, file.type, false);
-    const fileBuffer = await file.arrayBuffer();
+    const fileBuffer = Buffer.from(await file.arrayBuffer());
     
-    // Check signed headers in presigned URL
-    const urlObj = new URL(uploadUrl);
-    const signedHeaders = urlObj.searchParams.get('X-Amz-SignedHeaders') ?? '';
-    const headers: Record<string, string> = { 'Content-Type': file.type };
-    if (signedHeaders.includes('content-disposition')) {
-      headers['Content-Disposition'] = 'attachment';
-    }
-    
-    const uploadRes = await fetch(uploadUrl, {
-      method: 'PUT',
-      body: fileBuffer,
-      headers,
-    });
-    if (!uploadRes.ok) return NextResponse.json({ error: 'Błąd uploadu' }, { status: 500 });
+    // Save locally
+    const cloud_storage_path = await saveFile(fileBuffer, file.name, file.type, false);
 
     // Parse PDF via LLM API
-    const base64String = Buffer.from(fileBuffer).toString('base64');
+    const base64String = fileBuffer.toString('base64');
     const parsePrompt = `Przeanalizuj ten wyciąg bankowy PKO BP w formacie PDF. Wyodrębnij WSZYSTKIE transakcje i zwróć je w formacie JSON.
 
 Dla każdej transakcji podaj:
 - operationDate (format YYYY-MM-DD)
 - valueDate (format YYYY-MM-DD)
 - operationId (identyfikator operacji)
-- operationType (typ operacji, np. "PRZELEW WYCHODZACY", "ZAKUP PRZY UZYCIU KARTY")
+- operationType (typ operacji)
 - description (pełny opis operacji)
 - amount (kwota jako liczba, ujemna = wydatek)
 - balance (saldo po operacji jako liczba)
@@ -60,38 +47,27 @@ Odpowiedz TYLKO czystym JSON w formacie:
 }
 Nie używaj markdown, code blocks ani formatowania.`;
 
-    const llmResponse = await fetch('https://apps.abacus.ai/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${process.env.ABACUSAI_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: 'gpt-5.4-mini',
-        messages: [{
+    let parsed: any = {};
+    try {
+      const content = await callLlm(
+        [{
           role: 'user',
           content: [
-            { type: 'file', file: { filename: file.name, file_data: `data:application/pdf;base64,${base64String}` } },
+            { type: 'image_url', image_url: { url: `data:application/pdf;base64,${base64String}` } },
             { type: 'text', text: parsePrompt },
           ],
         }],
-        max_tokens: 8000,
-        response_format: { type: 'json_object' },
-      }),
-    });
-
-    if (!llmResponse.ok) {
-      // Still save the statement but without parsed transactions
+        { maxTokens: 8000, responseFormat: { type: 'json_object' } }
+      );
+      parsed = JSON.parse(content);
+    } catch (parseErr) {
+      console.error('LLM parsing error:', parseErr);
+      // Save statement without transactions
       const statement = await prisma.bankStatement.create({
         data: { fileName: file.name, cloudStoragePath: cloud_storage_path },
       });
-      return NextResponse.json({ statement, parseError: 'Nie udało się przeanalizować PDF' });
+      return NextResponse.json({ statement, parseError: 'Nie udało się przeanalizować PDF. Sprawdź konfigurację API LLM.' });
     }
-
-    const llmData = await llmResponse.json();
-    const content = llmData?.choices?.[0]?.message?.content ?? '{}';
-    let parsed: any = {};
-    try { parsed = JSON.parse(content); } catch { parsed = {}; }
 
     const statement = await prisma.bankStatement.create({
       data: {

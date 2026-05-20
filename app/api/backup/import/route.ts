@@ -8,11 +8,11 @@ export async function POST(request: Request) {
   try {
     const session = await getServerSession(authOptions);
     if (!session || (session.user as any)?.role !== 'ADMIN') {
-      return NextResponse.json({ error: 'Brak uprawnie\u0144' }, { status: 403 });
+      return NextResponse.json({ error: 'Brak uprawnień' }, { status: 403 });
     }
     const body = await request.json();
     const data = body?.data;
-    if (!data) return NextResponse.json({ error: 'Nieprawid\u0142owy format danych' }, { status: 400 });
+    if (!data) return NextResponse.json({ error: 'Nieprawidłowy format danych' }, { status: 400 });
 
     let imported = { vehicles: 0, entries: 0, fuelPurchases: 0, settings: 0 };
 
@@ -50,6 +50,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ success: true, imported });
   } catch (error: any) {
     console.error(error);
-    return NextResponse.json({ error: 'B\u0142\u0105d importu' }, { status: 500 });
+    return NextResponse.json({ error: 'Błąd importu' }, { status: 500 });
   }
 }

@@ -20,11 +20,11 @@ export function ReportsClient() {
   }, []);
 
   const months = [
-    { v: '', l: 'Ca\u0142y rok' },
-    { v: '1', l: 'Stycze\u0144' }, { v: '2', l: 'Luty' }, { v: '3', l: 'Marzec' },
-    { v: '4', l: 'Kwiecie\u0144' }, { v: '5', l: 'Maj' }, { v: '6', l: 'Czerwiec' },
-    { v: '7', l: 'Lipiec' }, { v: '8', l: 'Sierpie\u0144' }, { v: '9', l: 'Wrzesie\u0144' },
-    { v: '10', l: 'Pa\u017adziernik' }, { v: '11', l: 'Listopad' }, { v: '12', l: 'Grudzie\u0144' },
+    { v: '', l: 'Cały rok' },
+    { v: '1', l: 'Styczeń' }, { v: '2', l: 'Luty' }, { v: '3', l: 'Marzec' },
+    { v: '4', l: 'Kwiecień' }, { v: '5', l: 'Maj' }, { v: '6', l: 'Czerwiec' },
+    { v: '7', l: 'Lipiec' }, { v: '8', l: 'Sierpień' }, { v: '9', l: 'Wrzesień' },
+    { v: '10', l: 'Październik' }, { v: '11', l: 'Listopad' }, { v: '12', l: 'Grudzień' },
   ];
 
   const generatePdf = async () => {
@@ -38,20 +38,33 @@ export function ReportsClient() {
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        toast.error(err?.error ?? 'B\u0142\u0105d generowania');
+        toast.error(err?.error ?? 'Błąd generowania');
         return;
       }
+      const contentType = res.headers.get('Content-Type') ?? '';
       const blob = await res.blob();
       const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `ewidencja_${year}${month ? '_' + month : ''}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      window.URL.revokeObjectURL(url);
-      toast.success('PDF wygenerowany i pobrany');
-    } catch { toast.error('B\u0142\u0105d'); }
+      
+      if (contentType.includes('text/html')) {
+        // Fallback: otwórz HTML w nowej karcie do wydruku (Ctrl+P)
+        const w = window.open(url, '_blank');
+        if (w) {
+          toast.success('Raport otwarty w nowej karcie. Użyj Ctrl+P aby zapisać jako PDF.');
+        } else {
+          toast.error('Przeglądarka zablokowała otwarcie nowej karty. Odblokuj popup.');
+        }
+      } else {
+        // PDF — pobierz normalnie
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `ewidencja_${year}${month ? '_' + month : ''}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(url);
+        toast.success('PDF wygenerowany i pobrany');
+      }
+    } catch { toast.error('Błąd'); }
     finally { setGenerating(false); }
   };
 
@@ -68,21 +81,21 @@ export function ReportsClient() {
       a.click();
       a.remove();
       toast.success('Dane wyeksportowane');
-    } catch { toast.error('B\u0142\u0105d eksportu'); }
+    } catch { toast.error('Błąd eksportu'); }
   };
 
   return (
     <div>
       <div className="mb-6">
         <h1 className="text-2xl font-display font-bold tracking-tight">Raporty</h1>
-        <p className="text-muted-foreground">Generowanie raport\u00f3w ewidencji przebiegu i eksport danych</p>
+        <p className="text-muted-foreground">Generowanie raportów ewidencji przebiegu i eksport danych</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <Card style={{boxShadow: 'var(--shadow-sm)'}}>
           <CardHeader>
             <CardTitle className="text-lg flex items-center gap-2"><FileText className="w-5 h-5" /> Raport ewidencji PDF</CardTitle>
-            <CardDescription>Wygeneruj ewidencj\u0119 przebiegu w formacie PDF zgodnym z ustaw\u0105</CardDescription>
+            <CardDescription>Wygeneruj ewidencję przebiegu w formacie PDF zgodnym z ustawą</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
@@ -100,7 +113,7 @@ export function ReportsClient() {
                 <Input type="number" value={year} onChange={(e: any) => setYear(e?.target?.value ?? '')} />
               </div>
               <div className="space-y-2">
-                <Label>Miesi\u0105c</Label>
+                <Label>Miesiąc</Label>
                 <Select value={month || 'all'} onValueChange={(v: string) => setMonth(v === 'all' ? '' : v)}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>

@@ -28,11 +28,11 @@ export function BankClient() {
       formData.append('file', file);
       const res = await fetch('/api/bank/upload', { method: 'POST', body: formData });
       const data = await res.json();
-      if (!res.ok) { toast.error(data?.error ?? 'B\u0142\u0105d'); return; }
+      if (!res.ok) { toast.error(data?.error ?? 'Błąd'); return; }
       toast.success(`Zaimportowano ${data?.transactionCount ?? 0} transakcji`);
       if (data?.parseError) toast.warning(data.parseError);
       fetchStatements();
-    } catch { toast.error('B\u0142\u0105d uploadu'); }
+    } catch { toast.error('Błąd uploadu'); }
     finally { setUploading(false); if (fileRef.current) fileRef.current.value = ''; }
   };
 
@@ -45,8 +45,8 @@ export function BankClient() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-display font-bold tracking-tight">Wyci\u0105gi bankowe</h1>
-          <p className="text-muted-foreground">Import wyci\u0105g\u00f3w PKO BP i identyfikacja transakcji paliwowych</p>
+          <h1 className="text-2xl font-display font-bold tracking-tight">Wyciągi bankowe</h1>
+          <p className="text-muted-foreground">Import wyciągów PKO BP i identyfikacja transakcji paliwowych</p>
         </div>
         <div>
           <input ref={fileRef} type="file" accept=".pdf" className="hidden" onChange={handleUpload} />
@@ -62,8 +62,8 @@ export function BankClient() {
         <Card style={{boxShadow: 'var(--shadow-sm)'}}>
           <CardContent className="py-12 text-center text-muted-foreground">
             <Building2 className="w-12 h-12 mx-auto mb-4 opacity-30" />
-            <p>Brak zaimportowanych wyci\u0105g\u00f3w</p>
-            <p className="text-sm">Kliknij "Importuj PDF" aby przes\u0142a\u0107 wyci\u0105g bankowy PKO BP</p>
+            <p>Brak zaimportowanych wyciągów</p>
+            <p className="text-sm">Kliknij "Importuj PDF" aby przesłać wyciąg bankowy PKO BP</p>
           </CardContent>
         </Card>
       ) : (
@@ -82,9 +82,9 @@ export function BankClient() {
                         {st?.fileName}
                       </CardTitle>
                       <CardDescription>
-                        Okres: {st?.periodFrom ? new Date(st.periodFrom).toLocaleDateString('pl-PL') : '?'} \u2013 {st?.periodTo ? new Date(st.periodTo).toLocaleDateString('pl-PL') : '?'}
-                        {' \u2022 '}{st?.transactions?.length ?? 0} transakcji
-                        {fuelTxs?.length > 0 && <> \u2022 <span className="text-green-600">{fuelTxs.length} paliwowych ({fuelTotal?.toFixed?.(2)} z\u0142)</span></>}
+                        Okres: {st?.periodFrom ? new Date(st.periodFrom).toLocaleDateString('pl-PL') : '?'} – {st?.periodTo ? new Date(st.periodTo).toLocaleDateString('pl-PL') : '?'}
+                        {' • '}{st?.transactions?.length ?? 0} transakcji
+                        {fuelTxs?.length > 0 && <> • <span className="text-green-600">{fuelTxs.length} paliwowych ({fuelTotal?.toFixed?.(2)} zł)</span></>}
                       </CardDescription>
                     </div>
                     {isExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
@@ -104,13 +104,13 @@ export function BankClient() {
                             <TableCell className="text-xs max-w-[150px] truncate">{tx?.operationType}</TableCell>
                             <TableCell className="text-sm max-w-xs truncate">{tx?.description}</TableCell>
                             <TableCell className={`text-right font-mono whitespace-nowrap ${(tx?.amount ?? 0) < 0 ? 'text-red-600' : 'text-green-600'}`}>
-                              {tx?.amount?.toFixed?.(2)} z\u0142
+                              {tx?.amount?.toFixed?.(2)} zł
                             </TableCell>
                             <TableCell>
                               <button onClick={() => toggleFuel(tx?.id, tx?.isFuel)} className="cursor-pointer">
                                 {tx?.isFuel ?
                                   <Badge className="bg-green-100 text-green-700"><Fuel className="w-3 h-3 mr-1" />{tx?.stationName ?? 'Paliwo'}</Badge> :
-                                  <Badge variant="secondary" className="text-xs">\u2014</Badge>
+                                  <Badge variant="secondary" className="text-xs">—</Badge>
                                 }
                               </button>
                             </TableCell>
