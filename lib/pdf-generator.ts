@@ -1,16 +1,24 @@
 /**
  * Generator PDF - wersja standalone
- * Używa html-pdf-node (nie wymaga puppeteer zainstalowanego globalnie)
- * Alternatywnie można użyć jsPDF na froncie.
+ * Używa puppeteer-core z systemowym Chromium (zainstalowanym w kontenerze Docker)
+ * Fallback: zwraca HTML jeśli puppeteer-core niedostępny
  */
 
 export async function generatePdfFromHtml(htmlContent: string): Promise<Buffer> {
-  // Dynamiczny import - puppeteer zainstalowane w kontenerze
   try {
-    const puppeteer = require('puppeteer');
+    // puppeteer-core nie pobiera Chromium - używa systemowego
+    const puppeteer = require('puppeteer-core');
+    const executablePath = process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium-browser';
+    
     const browser = await puppeteer.launch({
       headless: 'new',
-      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
+      executablePath,
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-gpu',
+      ],
     });
     const page = await browser.newPage();
     await page.setContent(htmlContent, { waitUntil: 'networkidle0' });
@@ -23,8 +31,8 @@ export async function generatePdfFromHtml(htmlContent: string): Promise<Buffer> 
     await browser.close();
     return Buffer.from(pdfBuffer);
   } catch (e) {
-    console.error('Puppeteer unavailable, falling back to basic PDF:', e);
-    // Fallback: zwróć HTML jako "PDF" (użytkownik może zainstalować puppeteer)
+    console.error('Puppeteer-core unavailable, falling back to HTML:', e);
+    // Fallback: zwróć HTML (użytkownik może zainstalować puppeteer-core + chromium)
     return Buffer.from(htmlContent, 'utf-8');
   }
 }

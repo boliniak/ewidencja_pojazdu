@@ -61,7 +61,9 @@ COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
 COPY --from=builder /app/node_modules/tsx ./node_modules/tsx
 COPY --from=builder /app/node_modules/bcryptjs ./node_modules/bcryptjs
-COPY --from=builder /app/node_modules/puppeteer-core ./node_modules/puppeteer-core 2>/dev/null || true
+
+# Zainstaluj puppeteer-core do generowania PDF (lekka wersja bez bundlowanego Chromium)
+RUN yarn add puppeteer-core@22.15.0 --ignore-scripts 2>/dev/null || true
 
 COPY entrypoint.sh ./entrypoint.sh
 RUN chmod +x ./entrypoint.sh
