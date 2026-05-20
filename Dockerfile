@@ -52,17 +52,19 @@ ENV NEXT_TELEMETRY_DISABLED=1
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 
+# Copy built app
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
+
+# Copy Prisma schema + client for db push at startup
 COPY --from=builder /app/prisma ./prisma
-COPY --from=builder /app/scripts ./scripts
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
-COPY --from=builder /app/node_modules/tsx ./node_modules/tsx
+COPY --from=builder /app/node_modules/prisma ./node_modules/prisma
 COPY --from=builder /app/node_modules/bcryptjs ./node_modules/bcryptjs
 
-# Zainstaluj puppeteer-core do generowania PDF (lekka wersja bez bundlowanego Chromium)
+# Install puppeteer-core for PDF generation
 RUN yarn add puppeteer-core@22.15.0 --ignore-scripts 2>/dev/null || true
 
 COPY entrypoint.sh ./entrypoint.sh
@@ -70,7 +72,7 @@ RUN chmod +x ./entrypoint.sh
 
 # Create directories
 RUN mkdir -p /app/uploads /app/backups \
-    && chown -R nextjs:nodejs /app/uploads /app/backups
+    && chown -R nextjs:nodejs /app/uploads /app/backups /app
 
 USER nextjs
 
