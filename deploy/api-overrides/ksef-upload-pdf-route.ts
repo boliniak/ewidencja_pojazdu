@@ -4,8 +4,65 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/prisma';
 import { parsePdfOffline } from '@/lib/pdf-ocr-parser';
+import { callLlm } from '@/lib/llm-client';
 
 const FUEL_KEYWORDS = ['BP', 'ORLEN', 'LOTOS', 'SHELL', 'CIRCLE K', 'AMIC', 'MOYA', 'STACJA PALIW', 'FUEL', 'MOL', 'TOTAL', 'BENZYNA', 'DIESEL', 'ON ', 'PB95', 'PB98', 'LPG', 'PALIW'];
+
+/**
+ * Parsuj PDF za pomocą LLM (jeśli dostępny OPENAI_API_KEY)
+ */
+async function parsePdfWithLlm(base64String: string, fileName: string): Promise<any[]> {
+  if (!process.env.OPENAI_API_KEY) return [];
+
+  const parsePrompt = `Przeanalizuj tę fakturę w formacie PDF. Wyodrębnij dane.
+
+Zwróć JSON:
+{
+  "invoices": [{
+    "invoiceNumber": "numer faktury",
+    "issueDate": "YYYY-MM-DD",
+    "sellerName": "nazwa sprzedawcy",
+    "sellerNip": "NIP 10 cyfr",
+    "grossAmount": 0,
+    "netAmount": 0,
+    "vatAmount": 0,
+    "isFuel": false,
+    "fuelLiters": null,
+    "fuelPricePerLiter": null
+  }]
+}
+Odpowiedz TYLKO czystym JSON.`;
+
+  try {
+    // Sposób 1: typ "file"
+    let content: string;
+    try {
+      content = await callLlm(
+        [{ role: 'user', content: [
+          { type: 'file', file: { filename: fileName, file_data: `data:application/pdf;base64,${base64String}` } },
+          { type: 'text', text: parsePrompt },
+        ]}],
+        { maxTokens: 4000, responseFormat: { type: 'json_object' } }
+      );
+    } catch {
+      // Fallback: image_url
+      content = await callLlm(
+        [{ role: 'user', content: [
+          { type: 'image_url', image_url: { url: `data:application/pdf;base64,${base64String}` } },
+          { type: 'text', text: parsePrompt },
+        ]}],
+        { maxTokens: 4000, responseFormat: { type: 'json_object' } }
+      );
+    }
+
+    const parsed = JSON.parse(content);
+    const invoices = parsed?.invoices ?? (parsed?.invoiceNumber ? [parsed] : []);
+    return invoices.map((inv: any) => ({ ...inv, ocrConfidence: 'LLM' }));
+  } catch (e: any) {
+    console.error('[PDF] Błąd LLM:', e?.message);
+    return [];
+  }
+}
 
 export async function POST(request: Request) {
   try {
@@ -21,16 +78,33 @@ export async function POST(request: Request) {
     }
 
     const fileBuffer = Buffer.from(await file.arrayBuffer());
+    const base64String = fileBuffer.toString('base64');
 
-    // Analiza offline (OCR + regex) — bez potrzeby internetu
-    let invoices: any[];
-    try {
-      invoices = await parsePdfOffline(fileBuffer, file.name);
-    } catch (ocrErr: any) {
-      console.error('OCR parsing error:', ocrErr?.message);
-      return NextResponse.json({ 
-        error: `Nie udało się przeanalizować PDF: ${ocrErr?.message ?? 'błąd OCR'}` 
-      }, { status: 422 });
+    // === STRATEGIA HYBRYDOWA ===
+    // 1. Spróbuj LLM (najlepsza jakość, wymaga OPENAI_API_KEY)
+    // 2. Jeśli brak klucza lub błąd — użyj OCR offline
+    let invoices: any[] = [];
+    let method = 'unknown';
+
+    // Próba LLM
+    invoices = await parsePdfWithLlm(base64String, file.name);
+    if (invoices.length > 0) {
+      method = 'llm';
+      console.log(`[PDF] Przetworzono przez LLM: ${invoices.length} faktur`);
+    }
+
+    // Fallback: OCR offline
+    if (invoices.length === 0) {
+      try {
+        invoices = await parsePdfOffline(fileBuffer, file.name);
+        method = 'ocr';
+        console.log(`[PDF] Przetworzono przez OCR: ${invoices.length} faktur`);
+      } catch (ocrErr: any) {
+        console.error('[PDF] Błąd OCR:', ocrErr?.message);
+        return NextResponse.json({
+          error: `Nie udało się przeanalizować PDF. ${!process.env.OPENAI_API_KEY ? 'Skonfiguruj OPENAI_API_KEY w .env dla lepszej dokładności.' : ''} Błąd: ${ocrErr?.message ?? 'nieznany'}`
+        }, { status: 422 });
+      }
     }
 
     if (!invoices || invoices.length === 0) {
@@ -39,28 +113,28 @@ export async function POST(request: Request) {
 
     let imported = 0;
     let skipped = 0;
+    let updated = 0;
     const results: any[] = [];
 
     for (const inv of invoices) {
       const invoiceNumber = inv?.invoiceNumber ?? '';
       const sellerName = inv?.sellerName ?? '';
 
-      // Sprawdź duplikaty po numerze faktury
+      // Duplikaty
       if (invoiceNumber) {
         const existing = await prisma.ksefInvoice.findFirst({ where: { invoiceNumber } });
         if (existing) {
-          // Jeśli istnieje ale brakuje litrów — zaktualizuj
           if (!existing.fuelLiters && inv?.fuelLiters) {
             await prisma.ksefInvoice.update({
               where: { id: existing.id },
               data: {
                 isFuel: inv.isFuel ?? existing.isFuel,
-                fuelLiters: inv.fuelLiters,
-                fuelPricePerLiter: inv.fuelPricePerLiter,
+                fuelLiters: parseFloat(String(inv.fuelLiters)) || null,
+                fuelPricePerLiter: parseFloat(String(inv.fuelPricePerLiter)) || null,
               },
             });
+            updated++;
             results.push({ invoiceNumber, status: 'zaktualizowano (litry)' });
-            imported++;
           } else {
             skipped++;
             results.push({ invoiceNumber, status: 'duplikat' });
@@ -70,8 +144,7 @@ export async function POST(request: Request) {
       }
 
       const isFuel = inv?.isFuel === true || FUEL_KEYWORDS.some(kw =>
-        sellerName.toUpperCase().includes(kw) ||
-        JSON.stringify(inv).toUpperCase().includes(kw)
+        sellerName.toUpperCase().includes(kw) || JSON.stringify(inv).toUpperCase().includes(kw)
       );
 
       const record = await prisma.ksefInvoice.create({
@@ -87,30 +160,31 @@ export async function POST(request: Request) {
           isFuel,
           fuelLiters: isFuel ? (parseFloat(String(inv?.fuelLiters ?? '0')) || null) : null,
           fuelPricePerLiter: isFuel ? (parseFloat(String(inv?.fuelPricePerLiter ?? '0')) || null) : null,
-          rawData: JSON.stringify({ source: 'pdf_upload', fileName: file.name, ocrConfidence: inv?.ocrConfidence ?? 'unknown', parsedData: inv }),
+          rawData: JSON.stringify({ source: 'pdf_upload', fileName: file.name, method, ocrConfidence: inv?.ocrConfidence ?? 'unknown', parsedData: inv }),
         },
       });
       imported++;
-      results.push({ 
-        invoiceNumber, sellerName, isFuel, 
-        fuelLiters: record.fuelLiters, 
-        id: record.id, 
+      results.push({
+        invoiceNumber, sellerName, isFuel,
+        fuelLiters: record.fuelLiters,
+        id: record.id,
         status: 'zaimportowano',
-        ocrConfidence: inv?.ocrConfidence,
+        method,
       });
     }
 
     return NextResponse.json({
       success: true,
       imported,
+      updated,
       skipped,
       total: invoices.length,
       results,
-      method: 'offline-ocr',
+      method,
     });
 
   } catch (error: any) {
     console.error('PDF upload error:', error);
-    return NextResponse.json({ error: `Błąd przetwarzania pliku PDF: ${error?.message?.substring(0, 200) ?? 'nieznany błąd'}` }, { status: 500 });
+    return NextResponse.json({ error: `Błąd przetwarzania: ${error?.message?.substring(0, 200) ?? 'nieznany błąd'}` }, { status: 500 });
   }
 }

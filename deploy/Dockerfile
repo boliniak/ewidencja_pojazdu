@@ -59,8 +59,8 @@ RUN apk add --no-cache libc6-compat openssl curl postgresql-client
 # Chromium do generowania PDF
 RUN apk add --no-cache chromium nss freetype harfbuzz ca-certificates ttf-freefont
 
-# OCR do offline analizy faktur PDF (Tesseract + polski język + poppler do PDF→obraz)
-RUN apk add --no-cache tesseract-ocr tesseract-ocr-data-pol poppler-utils
+# OCR do offline analizy faktur PDF (Tesseract + polski język + poppler + ImageMagick do preprocessingu)
+RUN apk add --no-cache tesseract-ocr tesseract-ocr-data-pol poppler-utils imagemagick
 
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
