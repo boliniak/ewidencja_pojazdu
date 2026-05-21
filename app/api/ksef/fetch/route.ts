@@ -88,14 +88,21 @@ export async function POST(request: Request) {
       if (keysParsed.isJson) {
         // JSON response — look for certificate in structured data
         const keysData = keysParsed.json;
-        const tokenEncKey = keysData?.certificates?.find?.((c: any) => c.usage === 'KsefTokenEncryption')
-          || keysData?.items?.find?.((c: any) => c.usage === 'KsefTokenEncryption')
-          || (Array.isArray(keysData) ? keysData.find((c: any) => c.usage === 'KsefTokenEncryption') : null)
+        // API v2 returns: { certificates: [{ usage: ["KsefTokenEncryption"], certificate: "...", keyId: "...", certificateId: "..." }] }
+        // usage can be string or array
+        const findTokenKey = (list: any[]) => list?.find?.((c: any) => {
+          const u = c.usage;
+          return u === 'KsefTokenEncryption' || (Array.isArray(u) && u.includes('KsefTokenEncryption'));
+        });
+        const tokenEncKey = findTokenKey(keysData?.certificates)
+          || findTokenKey(keysData?.items)
+          || (Array.isArray(keysData) ? findTokenKey(keysData) : null)
+          || keysData?.certificates?.[0]
           || keysData?.[0];
         if (tokenEncKey?.pem || tokenEncKey?.certificate) {
           ksefPublicKeyPem = tokenEncKey.pem || tokenEncKey.certificate;
-          publicKeyId = tokenEncKey.id || tokenEncKey.publicKeyId || '';
-          log(`Klucz publiczny pobrany z JSON (id: ${publicKeyId || 'brak'})`);
+          publicKeyId = tokenEncKey.keyId || tokenEncKey.id || tokenEncKey.publicKeyId || '';
+          log(`Klucz publiczny pobrany z JSON (keyId: ${publicKeyId || 'brak'}, usage: ${JSON.stringify(tokenEncKey.usage)})`);
         }
       }
 
@@ -195,14 +202,45 @@ export async function POST(request: Request) {
 
     try {
       const tokenPayload = `${config.tokenEncrypted}|${timestampMs}`;
-      // Ensure PEM has proper line breaks
-      let pemKey = ksefPublicKeyPem;
-      if (!pemKey.includes('\n')) {
-        pemKey = pemKey.replace(/(-----BEGIN[^-]+-----)/, '$1\n').replace(/(-----END[^-]+-----)/, '\n$1');
+
+      // Normalize PEM — ensure proper line breaks (64 chars per line)
+      let pemKey = ksefPublicKeyPem.trim();
+
+      // If it's raw base64 without PEM headers, wrap it as a CERTIFICATE
+      if (!pemKey.startsWith('-----')) {
+        // Remove any whitespace/newlines from raw base64
+        const cleanB64 = pemKey.replace(/\s+/g, '');
+        // Wrap with proper 64-char line breaks
+        const lines = cleanB64.match(/.{1,64}/g) || [];
+        pemKey = `-----BEGIN CERTIFICATE-----\n${lines.join('\n')}\n-----END CERTIFICATE-----`;
+        log('Opakowano surowy Base64 w format PEM CERTIFICATE');
+      } else {
+        // Has PEM headers — ensure body has proper 64-char line breaks
+        const headerMatch = pemKey.match(/(-----BEGIN[^-]+-----)([\s\S]*?)(-----END[^-]+-----)/);
+        if (headerMatch) {
+          const cleanB64 = headerMatch[2].replace(/\s+/g, '');
+          const lines = cleanB64.match(/.{1,64}/g) || [];
+          pemKey = `${headerMatch[1]}\n${lines.join('\n')}\n${headerMatch[3]}`;
+        }
       }
+
+      // Extract the actual PUBLIC KEY from the X.509 certificate
+      // crypto.publicEncrypt may fail with CERTIFICATE PEM on some Node.js versions
+      let encryptionKey: crypto.KeyObject | string;
+      try {
+        encryptionKey = crypto.createPublicKey({
+          key: pemKey,
+          format: 'pem',
+        });
+        log('Wyekstrahowano klucz publiczny z certyfikatu X.509');
+      } catch (extractErr: any) {
+        log(`Uwaga: nie udało się wyekstrahować klucza (${extractErr?.message}), próbuję bezpośrednio PEM`);
+        encryptionKey = pemKey;
+      }
+
       const encrypted = crypto.publicEncrypt(
         {
-          key: pemKey,
+          key: encryptionKey,
           padding: crypto.constants.RSA_PKCS1_OAEP_PADDING,
           oaepHash: 'sha256',
         },
