@@ -377,15 +377,25 @@ export async function POST(request: Request) {
       }
 
       if (redeemParsed.isJson) {
-        accessToken = redeemParsed.json?.accessToken ?? '';
+        // Response structure: { accessToken: { token: "jwt...", validUntil: "..." }, refreshToken: "..." }
+        const atObj = redeemParsed.json?.accessToken;
+        if (typeof atObj === 'object' && atObj?.token) {
+          accessToken = atObj.token;
+        } else if (typeof atObj === 'string') {
+          accessToken = atObj;
+        }
+        // Also try top-level token field
+        if (!accessToken) {
+          accessToken = redeemParsed.json?.token ?? '';
+        }
       } else {
-        accessToken = xmlVal(redeemParsed.text, 'accessToken') || xmlVal(redeemParsed.text, 'AccessToken');
+        accessToken = xmlVal(redeemParsed.text, 'token') || xmlVal(redeemParsed.text, 'accessToken') || xmlVal(redeemParsed.text, 'AccessToken');
       }
       if (!accessToken) {
-        log(`Brak accessToken: ${redeemParsed.text.substring(0, 300)}`);
-        return NextResponse.json({ error: 'KSeF nie zwrócił accessToken', details: redeemParsed.text.substring(0, 300), logs }, { status: 502 });
+        log(`Brak accessToken w odpowiedzi redeem: ${redeemParsed.text.substring(0, 500)}`);
+        return NextResponse.json({ error: 'KSeF nie zwrócił accessToken', details: redeemParsed.text.substring(0, 500), logs }, { status: 502 });
       }
-      log('AccessToken JWT otrzymany');
+      log(`AccessToken JWT otrzymany (długość: ${accessToken.length}, prefix: ${accessToken.substring(0, 20)}...)`);
     } catch (e: any) {
       log(`Błąd token/redeem: ${e?.message}`);
       return NextResponse.json({ error: 'Błąd wymiany tokenu KSeF', logs }, { status: 502 });
