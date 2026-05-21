@@ -507,6 +507,62 @@ export async function POST(request: Request) {
         sellerName.toUpperCase().includes(kw) || description.includes(kw)
       );
 
+      // Dla faktur paliwowych — próbuj pobrać XML i wyekstrahować litry
+      let fuelLiters: number | null = null;
+      let fuelPricePerLiter: number | null = null;
+
+      if (isFuel && ksefNumber) {
+        try {
+          log(`  → Pobieranie XML faktury paliwowej: ${ksefNumber}...`);
+          const ksefNumStr = typeof ksefNumberObj === 'object' ? (ksefNumberObj?.value ?? ksefNumber) : ksefNumber;
+          const xmlRes = await fetch(`${baseUrl}/api/v2/invoices/ksef/${encodeURIComponent(ksefNumStr)}`, {
+            method: 'GET',
+            headers: {
+              'Authorization': `Bearer ${accessToken}`,
+              'Accept': 'application/xml, text/xml, */*',
+            },
+          });
+          if (xmlRes.ok) {
+            const xmlText = await xmlRes.text();
+            // Parse quantities from FA(3) XML structure
+            // Line items: <Fa><FaWiersz><Ilosc>53.86</Ilosc><JednMiara>L</JednMiara>...</FaWiersz></Fa>
+            // Also check for <P_8B> (quantity) and <P_8A> (unit)
+            const qtyMatches = xmlText.match(/<(?:Ilosc|P_8B)>\s*([\d.,]+)\s*<\//gi);
+            const unitMatches = xmlText.match(/<(?:JednMiara|P_8A)>\s*([^<]+)\s*<\//gi);
+            const priceMatches = xmlText.match(/<(?:CenaJednostkowa|P_9A|CenaJedn|P_9B)>\s*([\d.,]+)\s*<\//gi);
+
+            if (qtyMatches && qtyMatches.length > 0) {
+              let totalLiters = 0;
+              for (let qi = 0; qi < qtyMatches.length; qi++) {
+                const qtyStr = qtyMatches[qi].replace(/<[^>]+>/g, '').replace(',', '.').trim();
+                const qty = parseFloat(qtyStr) || 0;
+                // Check if unit is liters (L, l, litr, litry)
+                const unitStr = unitMatches?.[qi]?.replace(/<[^>]+>/g, '').trim() ?? '';
+                if (!unitStr || /^(L|l|litr|litry|LTR|LITR)$/i.test(unitStr)) {
+                  totalLiters += qty;
+                }
+              }
+              if (totalLiters > 0) {
+                fuelLiters = Math.round(totalLiters * 100) / 100;
+                if (fuelLiters > 0 && netAmount > 0) {
+                  fuelPricePerLiter = Math.round((netAmount / fuelLiters) * 100) / 100;
+                } else if (priceMatches?.[0]) {
+                  const priceStr = priceMatches[0].replace(/<[^>]+>/g, '').replace(',', '.').trim();
+                  fuelPricePerLiter = parseFloat(priceStr) || null;
+                }
+                log(`    Litry: ${fuelLiters} L, cena/L: ${fuelPricePerLiter ?? '?'} zł`);
+              }
+            }
+          } else {
+            log(`    Nie udało się pobrać XML (HTTP ${xmlRes.status})`);
+          }
+          // Rate limiting: wait 200ms between XML downloads
+          await sleep(200);
+        } catch (xmlErr: any) {
+          log(`    Błąd pobierania XML: ${xmlErr?.message}`);
+        }
+      }
+
       await prisma.ksefInvoice.create({
         data: {
           ksefNumber,
@@ -518,11 +574,13 @@ export async function POST(request: Request) {
           netAmount,
           vatAmount,
           isFuel,
+          fuelLiters,
+          fuelPricePerLiter,
           rawData: JSON.stringify(header),
         },
       });
       imported++;
-      if (isFuel) log(`  → FV paliwowa: ${invoiceNumber || ksefNumber} od ${sellerName}`);
+      if (isFuel) log(`  → FV paliwowa: ${invoiceNumber || ksefNumber} od ${sellerName} — ${fuelLiters ?? '?'} L`);
     }
 
     log(`Import zakończony: ${imported} nowych, ${skipped} pominięto (duplikaty)`);

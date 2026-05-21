@@ -9,10 +9,11 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Switch } from '@/components/ui/switch';
-import { Receipt, Settings, Plus, Fuel, Trash2, CheckCircle, XCircle, Save, Download } from 'lucide-react';
+import { Receipt, Settings, Plus, Fuel, Trash2, CheckCircle, XCircle, Save, Download, Upload, FileText } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { useSession } from 'next-auth/react';
+import { useRef } from 'react';
 
 export function KsefClient() {
   const { data: session } = useSession() || {};
@@ -28,6 +29,8 @@ export function KsefClient() {
   const [fetchLogs, setFetchLogs] = useState<string[]>([]);
   const [fetchRange, setFetchRange] = useState({ dateFrom: '', dateTo: '' });
   const [form, setForm] = useState({ invoiceNumber: '', ksefNumber: '', issueDate: '', sellerName: '', sellerNip: '', grossAmount: '', netAmount: '', vatAmount: '', isFuel: false, fuelLiters: '', fuelPricePerLiter: '' });
+  const [uploading, setUploading] = useState(false);
+  const pdfInputRef = useRef<HTMLInputElement>(null);
 
   const fetchConfig = () => { fetch('/api/ksef/config').then(r => r.json()).then(d => { setConfig(d ?? {}); setConfigForm({ nip: d?.nip ?? '', token: '', environment: d?.environment ?? 'TEST', active: d?.active ?? false }); }).catch(() => {}); };
   const fetchInvoices = () => { fetch('/api/ksef/invoices').then(r => r.json()).then(d => setInvoices(d ?? [])).catch(() => {}).finally(() => setLoading(false)); };
@@ -98,6 +101,45 @@ export function KsefClient() {
     setDialogOpen(true);
   };
 
+  const handlePdfUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    setUploading(true);
+    let totalImported = 0;
+    let totalSkipped = 0;
+    try {
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        if (!file.name.toLowerCase().endsWith('.pdf')) {
+          toast.error(`Plik ${file.name} nie jest PDF`);
+          continue;
+        }
+        toast.info(`Analizuję ${file.name}...`);
+        const formData = new FormData();
+        formData.append('file', file);
+        const res = await fetch('/api/ksef/upload-pdf', { method: 'POST', body: formData });
+        const data = await res.json();
+        if (res.ok && data?.success) {
+          totalImported += data.imported ?? 0;
+          totalSkipped += data.skipped ?? 0;
+        } else {
+          toast.error(data?.error ?? `Błąd przetwarzania ${file.name}`);
+        }
+      }
+      if (totalImported > 0) {
+        toast.success(`Zaimportowano ${totalImported} faktur z PDF${totalSkipped ? ` (pominięto ${totalSkipped} duplikatów)` : ''}`);
+        fetchInvoices();
+      } else if (totalSkipped > 0) {
+        toast.info(`Wszystkie faktury już istnieją (${totalSkipped} duplikatów)`);
+      }
+    } catch (err: any) {
+      toast.error('Błąd przetwarzania PDF');
+    } finally {
+      setUploading(false);
+      if (pdfInputRef.current) pdfInputRef.current.value = '';
+    }
+  };
+
   return (
     <div>
       <div className="mb-6">
@@ -114,10 +156,14 @@ export function KsefClient() {
         <TabsContent value="invoices">
           <div className="flex justify-between items-center mb-4">
             <p className="text-sm text-muted-foreground">Zarządzaj fakturami i oznaczaj faktury paliwowe</p>
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap">
               {config?.active && config?.hasToken && isAdmin && (
                 <Button variant="outline" onClick={openFetchDialog}><Download className="w-4 h-4 mr-1" /> Pobierz z KSeF</Button>
               )}
+              <input ref={pdfInputRef} type="file" accept=".pdf" multiple className="hidden" onChange={handlePdfUpload} />
+              <Button variant="outline" onClick={() => pdfInputRef.current?.click()} disabled={uploading}>
+                <Upload className="w-4 h-4 mr-1" /> {uploading ? 'Analizuję...' : 'Import z PDF'}
+              </Button>
               <Button onClick={openNew}><Plus className="w-4 h-4 mr-1" /> Dodaj fakturę</Button>
             </div>
           </div>
@@ -203,28 +249,40 @@ export function KsefClient() {
               <Table>
                 <TableHeader><TableRow>
                   <TableHead>Nr faktury</TableHead><TableHead>Data</TableHead><TableHead>Sprzedawca</TableHead>
-                  <TableHead className="text-right">Brutto</TableHead><TableHead>Paliwo</TableHead><TableHead>Litry</TableHead><TableHead className="text-right">Akcje</TableHead>
+                  <TableHead className="text-right">Brutto</TableHead><TableHead>Paliwo</TableHead><TableHead className="text-right">Litry</TableHead><TableHead className="text-right">Cena/L</TableHead><TableHead>Źródło</TableHead><TableHead className="text-right">Akcje</TableHead>
                 </TableRow></TableHeader>
                 <TableBody>
-                  {loading ? <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Wczytywanie...</TableCell></TableRow> :
-                  (invoices?.length ?? 0) === 0 ? <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Brak faktur</TableCell></TableRow> :
-                  invoices?.map?.((inv: any) => (
-                    <TableRow key={inv?.id}>
-                      <TableCell className="font-mono text-sm">{inv?.invoiceNumber || inv?.ksefNumber || '-'}</TableCell>
-                      <TableCell>{inv?.issueDate ? new Date(inv.issueDate).toLocaleDateString('pl-PL') : '-'}</TableCell>
-                      <TableCell>{inv?.sellerName ?? '-'}</TableCell>
-                      <TableCell className="text-right font-mono">{inv?.grossAmount?.toFixed?.(2)} zł</TableCell>
-                      <TableCell>
-                        <button onClick={() => toggleFuel(inv)} className="cursor-pointer">
-                          {inv?.isFuel ? <Badge className="bg-green-100 text-green-700"><Fuel className="w-3 h-3 mr-1" />Tak</Badge> : <Badge variant="secondary">Nie</Badge>}
-                        </button>
-                      </TableCell>
-                      <TableCell className="font-mono text-sm">{inv?.fuelLiters ? `${inv.fuelLiters} l` : '-'}</TableCell>
-                      <TableCell className="text-right">
-                        <Button variant="ghost" size="icon-sm" onClick={() => deleteInvoice(inv?.id)}><Trash2 className="w-4 h-4 text-destructive" /></Button>
-                      </TableCell>
-                    </TableRow>
-                  )) ?? []}
+                  {loading ? <TableRow><TableCell colSpan={9} className="text-center py-8 text-muted-foreground">Wczytywanie...</TableCell></TableRow> :
+                  (invoices?.length ?? 0) === 0 ? <TableRow><TableCell colSpan={9} className="text-center py-8 text-muted-foreground">Brak faktur</TableCell></TableRow> :
+                  invoices?.map?.((inv: any) => {
+                    const rawData = (() => { try { return JSON.parse(inv?.rawData ?? '{}'); } catch { return {}; } })();
+                    const source = inv?.ksefNumber ? 'KSeF' : rawData?.source === 'pdf_upload' ? 'PDF' : 'Ręcznie';
+                    return (
+                      <TableRow key={inv?.id}>
+                        <TableCell className="font-mono text-sm">{inv?.invoiceNumber || inv?.ksefNumber || '-'}</TableCell>
+                        <TableCell>{inv?.issueDate ? new Date(inv.issueDate).toLocaleDateString('pl-PL') : '-'}</TableCell>
+                        <TableCell>{inv?.sellerName ?? '-'}</TableCell>
+                        <TableCell className="text-right font-mono">{inv?.grossAmount?.toFixed?.(2)} zł</TableCell>
+                        <TableCell>
+                          <button onClick={() => toggleFuel(inv)} className="cursor-pointer">
+                            {inv?.isFuel ? <Badge className="bg-green-100 text-green-700"><Fuel className="w-3 h-3 mr-1" />Tak</Badge> : <Badge variant="secondary">Nie</Badge>}
+                          </button>
+                        </TableCell>
+                        <TableCell className="text-right font-mono">{inv?.fuelLiters ? `${Number(inv.fuelLiters).toFixed(2)} L` : '-'}</TableCell>
+                        <TableCell className="text-right font-mono">{inv?.fuelPricePerLiter ? `${Number(inv.fuelPricePerLiter).toFixed(2)} zł` : '-'}</TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className="text-xs">
+                            {source === 'KSeF' && <Download className="w-3 h-3 mr-1" />}
+                            {source === 'PDF' && <FileText className="w-3 h-3 mr-1" />}
+                            {source}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Button variant="ghost" size="icon-sm" onClick={() => deleteInvoice(inv?.id)}><Trash2 className="w-4 h-4 text-destructive" /></Button>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  }) ?? []}
                 </TableBody>
               </Table>
             </CardContent>
