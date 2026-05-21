@@ -165,11 +165,20 @@ function extractInvoiceNumber(text: string, lines: string[]): string {
       const num = sameLineMatch[1].trim();
       if (num.length >= 3) return num;
     }
-    // "FAKTURA NR:" na końcu linii — numer w następnej
-    if (/faktura\s+(?:vat\s+)?nr\.?\s*:?\s*$/i.test(line) && i + 1 < lines.length) {
-      // Następna linia to potencjalny numer faktury (może być zaszumiony OCR)
-      const nextLine = lines[i + 1].trim();
-      if (nextLine.length >= 3 && nextLine.length <= 50) return nextLine;
+    // "FAKTURA NR:" na końcu linii — numer w następnych liniach
+    if (/faktura\s+(?:vat\s+)?nr\.?\s*:?\s*$/i.test(line)) {
+      // Szukaj numeru w kolejnych 3 liniach
+      for (let j = 1; j <= 3 && i + j < lines.length; j++) {
+        const nextLine = lines[i + j].trim();
+        // Pomiń linie wyglądające na opisy produktów lub kwoty
+        if (/\d+[.,]\d+\s*[Ll]\s*x/i.test(nextLine)) continue; // "67,49L x 6.21"
+        if (/^\d+[.,]\d{2}$/.test(nextLine)) continue; // same kwoty "419,11"
+        if (/z[łl]|PLN|brutto|netto/i.test(nextLine)) continue;
+        // Akceptuj linię z alfanumerycznym numerem
+        if (nextLine.length >= 3 && nextLine.length <= 50 && /[A-Za-z0-9]/.test(nextLine)) {
+          return nextLine;
+        }
+      }
     }
     // "Nr dokumentu: XXX"
     const nrDocMatch = line.match(/nr\.?\s+(?:dokumentu|faktury|fv)[\s:]+(.{3,40})/i);

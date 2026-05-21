@@ -534,14 +534,20 @@ export async function POST(request: Request) {
             const xmlText = await xmlRes.text();
             log(`    XML pobrany (${xmlText.length} B, Content-Type: ${contentType})`);
 
-            // Parse quantities from FA(3) XML structure
-            // <FaWiersz> contains: <Ilosc>, <JednMiara>, <CenaJednostkowa>
-            // FA(2) uses: <P_8B> (quantity), <P_8A> (unit), <P_9A>/<P_9B> (price)
-            const qtyMatches = xmlText.match(/<(?:Ilosc|P_8B)>\s*([\d.,]+)\s*<\//gi);
-            const unitMatches = xmlText.match(/<(?:JednMiara|P_8A)>\s*([^<]+)\s*<\//gi);
-            const priceMatches = xmlText.match(/<(?:CenaJednostkowa|P_9A|CenaJedn|P_9B)>\s*([\d.,]+)\s*<\//gi);
+            // Parse quantities from FA(1/2/3) XML structure
+            // FA(3): <FaWiersz> → <Ilosc>, <JednMiara>, <CenaJednostkowa>
+            // FA(2): <P_8B> (qty), <P_8A> (unit), <P_9A>/<P_9B> (price)
+            // FA(1): <P_8B> (qty), <P_8A> (unit), <P_9A> (price)
+            const qtyMatches = xmlText.match(/<(?:Ilosc|P_8B|IloscJedn)>\s*([\d.,]+)\s*<\//gi);
+            const unitMatches = xmlText.match(/<(?:JednMiara|P_8A|JednostkaMiary)>\s*([^<]+)\s*<\//gi);
+            const priceMatches = xmlText.match(/<(?:CenaJednostkowa|P_9A|P_9B|CenaJedn)>\s*([\d.,]+)\s*<\//gi);
 
             log(`    Znaleziono ilości: ${qtyMatches?.length ?? 0}, jednostki: ${unitMatches?.length ?? 0}, ceny: ${priceMatches?.length ?? 0}`);
+            // Log first 1000 chars for debugging if no quantities found
+            if (!qtyMatches) {
+              const snippet = xmlText.substring(0, 1000).replace(/\n/g, ' ');
+              log(`    Fragment XML (brak ilości): ${snippet}...`);
+            }
 
             if (qtyMatches && qtyMatches.length > 0) {
               let totalLiters = 0;
@@ -550,9 +556,12 @@ export async function POST(request: Request) {
                 const qty = parseFloat(qtyStr) || 0;
                 const unitStr = unitMatches?.[qi]?.replace(/<[^>]+>/g, '').trim() ?? '';
                 log(`    Pozycja ${qi + 1}: ilość=${qty}, jednostka='${unitStr}'`);
-                // Accept liters: L, l, litr, litry, LTR, LITR, dm3, or empty (assume liters for fuel)
-                if (!unitStr || /^(L|l|litr|litry|LTR|LITR|dm3|dm³)$/i.test(unitStr)) {
-                  totalLiters += qty;
+                // Accept liters: L, l, litr, litry, LTR, LITR, dm3, szt (single fuel item), or empty
+                if (!unitStr || /^(L|l|litr|litry|LTR|LITR|dm3|dm³|szt\.?)?$/i.test(unitStr)) {
+                  // Only count if quantity looks like fuel volume (1-999 range)
+                  if (qty > 0.5 && qty < 1000) {
+                    totalLiters += qty;
+                  }
                 }
               }
               if (totalLiters > 0) {
@@ -565,14 +574,23 @@ export async function POST(request: Request) {
                 }
                 log(`    ✓ Litry: ${fuelLiters} L, cena/L: ${fuelPricePerLiter ?? '?'} zł`);
               } else {
-                log(`    ✗ Nie znaleziono litrów (nieznane jednostki)`);
+                log(`    ✗ Ilości znalezione ale nie pasują do litrów`);
               }
             } else {
-              // Fallback: szukaj wzorca liczbowego w kontekście paliwa
-              log(`    ✗ Brak tagów Ilosc/P_8B w XML`);
-              // Log short fragment for debugging
-              const snippet = xmlText.substring(0, 500).replace(/\n/g, ' ');
-              log(`    Fragment XML: ${snippet}...`);
+              // Fallback: szukaj bezpośrednio w tekście XML wartości, które wyglądają jak litry
+              log(`    ✗ Brak tagów Ilosc/P_8B/IloscJedn w XML`);
+              // Try generic number extraction near fuel-related content
+              const fuelLineMatch = xmlText.match(/(?:paliw|benzyn|diesel|ON|pb95|pb98|lpg|verva|efecta|miles|v-power|shell|futura)[^<]*?(\d+[.,]\d+)\s*(?:l|litr)/i);
+              if (fuelLineMatch) {
+                const fallbackQty = parseFloat(fuelLineMatch[1].replace(',', '.'));
+                if (fallbackQty > 0.5 && fallbackQty < 1000) {
+                  fuelLiters = Math.round(fallbackQty * 100) / 100;
+                  log(`    ✓ (fallback) Litry: ${fuelLiters} L`);
+                }
+              } else {
+                const snippet = xmlText.substring(0, 1000).replace(/\n/g, ' ');
+                log(`    Fragment XML: ${snippet}...`);
+              }
             }
           } else {
             const errBody = await xmlRes.text().catch(() => '');
