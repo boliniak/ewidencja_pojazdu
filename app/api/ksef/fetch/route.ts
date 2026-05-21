@@ -405,10 +405,12 @@ export async function POST(request: Request) {
     // KROK 7: Wyszukiwanie faktur (POST /invoices/query/metadata)
     // ============================================
     log('Krok 7: Wyszukiwanie faktur kosztowych...');
+    // API v2 enum values are PascalCase: Subject1 (seller), Subject2 (buyer), Subject3, SubjectAuthorized
+    // dateType: Issue, Invoicing, PermanentStorage
     const queryBody = {
-      subjectType: 'subject2',
+      subjectType: 'Subject2',
       dateRange: {
-        dateType: 'acquisition',
+        dateType: 'Invoicing',
         from: `${dateFrom}T00:00:00Z`,
         to: `${dateTo}T23:59:59Z`,
       },
@@ -455,10 +457,11 @@ export async function POST(request: Request) {
         ?? [];
       allInvoices = allInvoices.concat(invoices);
 
-      const totalElements = queryParsed.json?.numberOfElements ?? queryParsed.json?.totalCount ?? invoices.length;
-      log(`Strona ${pageOffset / pageSize + 1}: ${invoices.length} faktur (razem: ${allInvoices.length}/${totalElements})`);
+      log(`Strona ${pageOffset / pageSize + 1}: ${invoices.length} faktur (razem: ${allInvoices.length})`);
 
-      if (invoices.length < pageSize || allInvoices.length >= totalElements) {
+      // API v2 uses hasMore boolean in response
+      const responseHasMore = queryParsed.json?.hasMore ?? false;
+      if (!responseHasMore || invoices.length === 0) {
         hasMore = false;
       } else {
         pageOffset += pageSize;
@@ -476,7 +479,12 @@ export async function POST(request: Request) {
     let skipped = 0;
 
     for (const header of allInvoices) {
-      const ksefNumber = header?.ksefReferenceNumber ?? header?.invoiceReferenceNumber ?? header?.ksefNumber ?? '';
+      // API v2 InvoiceMetadata fields:
+      // ksefNumber (object with value), invoiceNumber, issueDate, invoicingDate,
+      // seller: { nip, name }, buyer: { identifier: { type, value }, name },
+      // grossAmount, netAmount, vatAmount
+      const ksefNumberObj = header?.ksefNumber;
+      const ksefNumber = typeof ksefNumberObj === 'object' ? (ksefNumberObj?.value ?? ksefNumberObj?.number ?? '') : (ksefNumberObj ?? header?.ksefReferenceNumber ?? '');
       const invoiceNumber = header?.invoiceNumber ?? '';
 
       // Duplikat?
@@ -485,12 +493,13 @@ export async function POST(request: Request) {
         if (existing) { skipped++; continue; }
       }
 
-      const issueDate = header?.invoicingDate ?? header?.invoiceDate ?? header?.acquisitionTimestamp ?? dateFrom;
-      const sellerName = header?.subjectBy?.issuedByName ?? header?.subjectByName ?? header?.sellerName ?? header?.subjectBy?.name ?? '';
-      const sellerNip = header?.subjectBy?.issuedByIdentifier ?? header?.subjectByIdentifier ?? header?.sellerNip ?? header?.subjectBy?.identifier ?? '';
-      const grossAmount = parseFloat(header?.invoiceGrossValue ?? header?.grossValue ?? header?.totalAmount ?? header?.amount ?? '0') || 0;
-      const netAmount = parseFloat(header?.invoiceNetValue ?? header?.netValue ?? '0') || 0;
-      const vatAmount = grossAmount - netAmount;
+      // API v2: issueDate (YYYY-MM-DD), seller: { nip, name }, grossAmount/netAmount/vatAmount (numbers)
+      const issueDate = header?.issueDate ?? header?.invoicingDate ?? dateFrom;
+      const sellerName = header?.seller?.name ?? '';
+      const sellerNip = typeof header?.seller?.nip === 'object' ? (header?.seller?.nip?.value ?? '') : (header?.seller?.nip ?? '');
+      const grossAmount = parseFloat(String(header?.grossAmount ?? header?.invoiceGrossValue ?? '0')) || 0;
+      const netAmount = parseFloat(String(header?.netAmount ?? header?.invoiceNetValue ?? '0')) || 0;
+      const vatAmount = parseFloat(String(header?.vatAmount ?? '0')) || (grossAmount - netAmount);
       const description = JSON.stringify(header).toUpperCase();
 
       // Detekcja paliwa
