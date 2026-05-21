@@ -530,22 +530,28 @@ export async function POST(request: Request) {
             },
           });
           if (xmlRes.ok) {
+            const contentType = xmlRes.headers.get('content-type') ?? '';
             const xmlText = await xmlRes.text();
+            log(`    XML pobrany (${xmlText.length} B, Content-Type: ${contentType})`);
+
             // Parse quantities from FA(3) XML structure
-            // Line items: <Fa><FaWiersz><Ilosc>53.86</Ilosc><JednMiara>L</JednMiara>...</FaWiersz></Fa>
-            // Also check for <P_8B> (quantity) and <P_8A> (unit)
+            // <FaWiersz> contains: <Ilosc>, <JednMiara>, <CenaJednostkowa>
+            // FA(2) uses: <P_8B> (quantity), <P_8A> (unit), <P_9A>/<P_9B> (price)
             const qtyMatches = xmlText.match(/<(?:Ilosc|P_8B)>\s*([\d.,]+)\s*<\//gi);
             const unitMatches = xmlText.match(/<(?:JednMiara|P_8A)>\s*([^<]+)\s*<\//gi);
             const priceMatches = xmlText.match(/<(?:CenaJednostkowa|P_9A|CenaJedn|P_9B)>\s*([\d.,]+)\s*<\//gi);
+
+            log(`    Znaleziono ilości: ${qtyMatches?.length ?? 0}, jednostki: ${unitMatches?.length ?? 0}, ceny: ${priceMatches?.length ?? 0}`);
 
             if (qtyMatches && qtyMatches.length > 0) {
               let totalLiters = 0;
               for (let qi = 0; qi < qtyMatches.length; qi++) {
                 const qtyStr = qtyMatches[qi].replace(/<[^>]+>/g, '').replace(',', '.').trim();
                 const qty = parseFloat(qtyStr) || 0;
-                // Check if unit is liters (L, l, litr, litry)
                 const unitStr = unitMatches?.[qi]?.replace(/<[^>]+>/g, '').trim() ?? '';
-                if (!unitStr || /^(L|l|litr|litry|LTR|LITR)$/i.test(unitStr)) {
+                log(`    Pozycja ${qi + 1}: ilość=${qty}, jednostka='${unitStr}'`);
+                // Accept liters: L, l, litr, litry, LTR, LITR, dm3, or empty (assume liters for fuel)
+                if (!unitStr || /^(L|l|litr|litry|LTR|LITR|dm3|dm³)$/i.test(unitStr)) {
                   totalLiters += qty;
                 }
               }
@@ -557,11 +563,20 @@ export async function POST(request: Request) {
                   const priceStr = priceMatches[0].replace(/<[^>]+>/g, '').replace(',', '.').trim();
                   fuelPricePerLiter = parseFloat(priceStr) || null;
                 }
-                log(`    Litry: ${fuelLiters} L, cena/L: ${fuelPricePerLiter ?? '?'} zł`);
+                log(`    ✓ Litry: ${fuelLiters} L, cena/L: ${fuelPricePerLiter ?? '?'} zł`);
+              } else {
+                log(`    ✗ Nie znaleziono litrów (nieznane jednostki)`);
               }
+            } else {
+              // Fallback: szukaj wzorca liczbowego w kontekście paliwa
+              log(`    ✗ Brak tagów Ilosc/P_8B w XML`);
+              // Log short fragment for debugging
+              const snippet = xmlText.substring(0, 500).replace(/\n/g, ' ');
+              log(`    Fragment XML: ${snippet}...`);
             }
           } else {
-            log(`    Nie udało się pobrać XML (HTTP ${xmlRes.status})`);
+            const errBody = await xmlRes.text().catch(() => '');
+            log(`    Nie udało się pobrać XML (HTTP ${xmlRes.status}): ${errBody.substring(0, 200)}`);
           }
           // Rate limiting: wait 200ms between XML downloads
           await sleep(200);

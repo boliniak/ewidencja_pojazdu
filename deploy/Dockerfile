@@ -27,6 +27,7 @@ RUN cp deploy/lib/local-storage.ts lib/local-storage.ts && \
     cp deploy/lib/llm-client.ts lib/llm-client.ts && \
     cp deploy/api-overrides/bank-upload-route.ts app/api/bank/upload/route.ts && \
     cp deploy/api-overrides/reports-generate-pdf-route.ts app/api/reports/generate-pdf/route.ts && \
+    cp deploy/api-overrides/ksef-upload-pdf-route.ts app/api/ksef/upload-pdf/route.ts && \
     rm -f lib/s3.ts lib/aws-config.ts && \
     sed -i '/<script.*appllm-lib.js.*<\/script>/d' app/layout.tsx && \
     sed -i 's/"exclude": \["node_modules"\]/"exclude": ["node_modules", "deploy"]/' tsconfig.json 2>/dev/null || true
@@ -34,6 +35,7 @@ RUN cp deploy/lib/local-storage.ts lib/local-storage.ts && \
 RUN echo "=== Verifying overrides ===" && \
     grep -q 'local-storage' app/api/bank/upload/route.ts && echo "✓ bank-upload override OK" || (echo "✗ bank-upload override FAILED" && exit 1) && \
     grep -q 'pdf-generator' app/api/reports/generate-pdf/route.ts && echo "✓ reports-pdf override OK" || (echo "✗ reports-pdf override FAILED" && exit 1) && \
+    grep -q 'callLlm' app/api/ksef/upload-pdf/route.ts && echo "✓ ksef-upload-pdf override OK" || (echo "✗ ksef-upload-pdf override FAILED" && exit 1) && \
     test ! -f lib/s3.ts && echo "✓ s3.ts removed OK" || (echo "✗ s3.ts still exists" && exit 1)
 
 RUN npx prisma generate
