@@ -22,6 +22,13 @@ async function safeParseResponse(res: Response): Promise<{ json?: any; text: str
   }
 }
 
+// Extract value from XML tag (case-insensitive)
+function xmlVal(xml: string, tag: string): string {
+  const regex = new RegExp(`<[^>]*${tag}[^>]*>([^<]*)<`, 'i');
+  const m = xml.match(regex);
+  return m?.[1]?.trim() ?? '';
+}
+
 // Sleep helper for polling
 function sleep(ms: number) { return new Promise(r => setTimeout(r, ms)); }
 
@@ -65,33 +72,71 @@ export async function POST(request: Request) {
     try {
       const keysRes = await fetch(`${baseUrl}/api/v2/security/public-key-certificates`, {
         method: 'GET',
-        headers: { 'Accept': 'application/json' },
+        headers: { 'Accept': 'application/json, application/xml, text/xml, */*' },
       });
       if (!keysRes.ok) {
-        log(`Błąd pobierania klucza publicznego: HTTP ${keysRes.status}`);
-        return NextResponse.json({ error: `Błąd pobierania klucza publicznego KSeF: HTTP ${keysRes.status}`, logs }, { status: 502 });
+        const errText = await keysRes.text();
+        log(`Błąd pobierania klucza publicznego: HTTP ${keysRes.status} — ${errText.substring(0, 300)}`);
+        return NextResponse.json({ error: `Błąd pobierania klucza publicznego KSeF: HTTP ${keysRes.status}`, details: errText.substring(0, 500), logs }, { status: 502 });
       }
-      const keysData = await keysRes.json();
-      // Find KsefTokenEncryption key
-      const tokenEncKey = keysData?.certificates?.find?.((c: any) => c.usage === 'KsefTokenEncryption')
-        || keysData?.items?.find?.((c: any) => c.usage === 'KsefTokenEncryption')
-        || keysData?.[0];
-      if (tokenEncKey?.pem || tokenEncKey?.certificate) {
-        ksefPublicKeyPem = tokenEncKey.pem || tokenEncKey.certificate;
-        publicKeyId = tokenEncKey.id || tokenEncKey.publicKeyId || '';
-        log(`Klucz publiczny pobrany (id: ${publicKeyId || 'brak'})`);
-      } else {
-        // Fallback: try direct PEM
-        const keysText = JSON.stringify(keysData);
-        log(`Odpowiedź kluczy: ${keysText.substring(0, 300)}`);
-        // Try to extract any PEM from response
-        const pemMatch = keysText.match(/-----BEGIN[^-]*-----[\s\S]*?-----END[^-]*-----/);
+
+      // Response may be JSON or XML — handle both
+      const keysParsed = await safeParseResponse(keysRes);
+      log(`Content-Type kluczy: ${keysRes.headers.get('content-type') ?? 'brak'}`);
+
+      if (keysParsed.isJson) {
+        // JSON response — look for certificate in structured data
+        const keysData = keysParsed.json;
+        const tokenEncKey = keysData?.certificates?.find?.((c: any) => c.usage === 'KsefTokenEncryption')
+          || keysData?.items?.find?.((c: any) => c.usage === 'KsefTokenEncryption')
+          || (Array.isArray(keysData) ? keysData.find((c: any) => c.usage === 'KsefTokenEncryption') : null)
+          || keysData?.[0];
+        if (tokenEncKey?.pem || tokenEncKey?.certificate) {
+          ksefPublicKeyPem = tokenEncKey.pem || tokenEncKey.certificate;
+          publicKeyId = tokenEncKey.id || tokenEncKey.publicKeyId || '';
+          log(`Klucz publiczny pobrany z JSON (id: ${publicKeyId || 'brak'})`);
+        }
+      }
+
+      // If not found via JSON, try to extract PEM from raw text (works for XML and other formats)
+      if (!ksefPublicKeyPem) {
+        const rawText = keysParsed.text;
+        log(`Odpowiedź kluczy (surowa, 300zn): ${rawText.substring(0, 300)}`);
+
+        // Extract PEM block
+        const pemMatch = rawText.match(/-----BEGIN[^-]*-----[\s\S]*?-----END[^-]*-----/);
         if (pemMatch) {
           ksefPublicKeyPem = pemMatch[0];
           log('Wyekstrahowano klucz PEM z odpowiedzi');
-        } else {
-          return NextResponse.json({ error: 'Nie znaleziono klucza publicznego KSeF w odpowiedzi', details: keysText.substring(0, 500), logs }, { status: 502 });
         }
+
+        // Extract base64-encoded certificate from XML tags
+        if (!ksefPublicKeyPem) {
+          // Try common XML tags: <pem>, <certificate>, <X509Certificate>, <value>
+          const certMatch = rawText.match(/<(?:pem|certificate|X509Certificate|value|cert)>([^<]+)<\//i);
+          if (certMatch?.[1]) {
+            const certBase64 = certMatch[1].trim();
+            // Wrap in PEM format
+            ksefPublicKeyPem = `-----BEGIN CERTIFICATE-----\n${certBase64}\n-----END CERTIFICATE-----`;
+            log('Wyekstrahowano certyfikat z XML i opakowano w PEM');
+          }
+        }
+
+        // Extract publicKeyId from XML
+        if (!publicKeyId) {
+          const idMatch = rawText.match(/<(?:id|publicKeyId|keyId)>([^<]+)<\//i);
+          if (idMatch?.[1]) {
+            publicKeyId = idMatch[1].trim();
+          }
+        }
+      }
+
+      if (!ksefPublicKeyPem) {
+        return NextResponse.json({
+          error: 'Nie znaleziono klucza publicznego KSeF w odpowiedzi',
+          details: keysParsed.text.substring(0, 500),
+          logs,
+        }, { status: 502 });
       }
     } catch (e: any) {
       log(`Błąd połączenia: ${e?.message}`);
@@ -123,8 +168,17 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: `Błąd autoryzacji KSeF (challenge): HTTP ${challengeRes.status}`, details: challengeParsed.text.substring(0, 1000), logs }, { status: 502 });
     }
 
-    const challenge = challengeParsed.json?.challenge ?? '';
-    const timestampMs = challengeParsed.json?.timestampMs ?? challengeParsed.json?.timestamp ?? '';
+    let challenge = '';
+    let timestampMs = '';
+    if (challengeParsed.isJson) {
+      challenge = challengeParsed.json?.challenge ?? '';
+      timestampMs = challengeParsed.json?.timestampMs ?? challengeParsed.json?.timestamp ?? '';
+    } else {
+      // XML fallback
+      challenge = xmlVal(challengeParsed.text, 'challenge') || xmlVal(challengeParsed.text, 'Challenge');
+      timestampMs = xmlVal(challengeParsed.text, 'timestampMs') || xmlVal(challengeParsed.text, 'TimestampMs') || xmlVal(challengeParsed.text, 'timestamp');
+      log(`Challenge z XML: challenge=${challenge ? 'OK' : 'brak'}, ts=${timestampMs || 'brak'}`);
+    }
 
     if (!challenge) {
       log(`Brak challenge w odpowiedzi: ${challengeParsed.text.substring(0, 500)}`);
@@ -207,8 +261,15 @@ export async function POST(request: Request) {
       }, { status: 502 });
     }
 
-    const authenticationToken = authParsed.json?.authenticationToken?.token ?? authParsed.json?.authenticationToken ?? '';
-    const referenceNumber = authParsed.json?.referenceNumber ?? '';
+    let authenticationToken = '';
+    let referenceNumber = '';
+    if (authParsed.isJson) {
+      authenticationToken = authParsed.json?.authenticationToken?.token ?? authParsed.json?.authenticationToken ?? '';
+      referenceNumber = authParsed.json?.referenceNumber ?? '';
+    } else {
+      authenticationToken = xmlVal(authParsed.text, 'token') || xmlVal(authParsed.text, 'authenticationToken');
+      referenceNumber = xmlVal(authParsed.text, 'referenceNumber') || xmlVal(authParsed.text, 'ReferenceNumber');
+    }
 
     if (!authenticationToken) {
       log(`Brak authenticationToken w odpowiedzi: ${authParsed.text.substring(0, 500)}`);
@@ -276,7 +337,11 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: `Błąd wymiany tokenu: HTTP ${redeemRes.status}`, details: redeemParsed.text.substring(0, 500), logs }, { status: 502 });
       }
 
-      accessToken = redeemParsed.json?.accessToken ?? '';
+      if (redeemParsed.isJson) {
+        accessToken = redeemParsed.json?.accessToken ?? '';
+      } else {
+        accessToken = xmlVal(redeemParsed.text, 'accessToken') || xmlVal(redeemParsed.text, 'AccessToken');
+      }
       if (!accessToken) {
         log(`Brak accessToken: ${redeemParsed.text.substring(0, 300)}`);
         return NextResponse.json({ error: 'KSeF nie zwrócił accessToken', details: redeemParsed.text.substring(0, 300), logs }, { status: 502 });
