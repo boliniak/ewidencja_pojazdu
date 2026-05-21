@@ -5,13 +5,13 @@ import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/prisma';
 import crypto from 'crypto';
 
-// KSeF API base URLs
+// KSeF API v2 base URLs (API v1 deactivated 01.02.2026)
 const KSEF_URLS: Record<string, string> = {
   TEST: 'https://ksef-test.mf.gov.pl',
   PROD: 'https://ksef.mf.gov.pl',
 };
 
-// Safely parse response — handle both JSON and XML
+// Safely parse response — handle both JSON and non-JSON
 async function safeParseResponse(res: Response): Promise<{ json?: any; text: string; isJson: boolean }> {
   const text = await res.text();
   try {
@@ -22,12 +22,8 @@ async function safeParseResponse(res: Response): Promise<{ json?: any; text: str
   }
 }
 
-// Extract value from XML tag
-function xmlVal(xml: string, tag: string): string {
-  const regex = new RegExp(`<[^>]*${tag}[^>]*>([^<]*)<`);
-  const m = xml.match(regex);
-  return m?.[1]?.trim() ?? '';
-}
+// Sleep helper for polling
+function sleep(ms: number) { return new Promise(r => setTimeout(r, ms)); }
 
 export async function POST(request: Request) {
   const logs: string[] = [];
@@ -57,234 +53,316 @@ export async function POST(request: Request) {
     log(`Środowisko: ${config.environment} (${baseUrl})`);
     log(`NIP: ${config.nip}`);
     log(`Zakres dat: ${dateFrom} — ${dateTo}`);
+    log('Używam KSeF API v2');
 
     // ============================================
-    // KROK 1: AuthorisationChallenge (JSON → JSON)
+    // KROK 1: Pobranie klucza publicznego KSeF
     // ============================================
-    log('Krok 1: Pobieranie wyzwania autoryzacyjnego...');
+    log('Krok 1: Pobieranie klucza publicznego KSeF...');
+    let ksefPublicKeyPem = '';
+    let publicKeyId = '';
+
+    try {
+      const keysRes = await fetch(`${baseUrl}/api/v2/security/public-key-certificates`, {
+        method: 'GET',
+        headers: { 'Accept': 'application/json' },
+      });
+      if (!keysRes.ok) {
+        log(`Błąd pobierania klucza publicznego: HTTP ${keysRes.status}`);
+        return NextResponse.json({ error: `Błąd pobierania klucza publicznego KSeF: HTTP ${keysRes.status}`, logs }, { status: 502 });
+      }
+      const keysData = await keysRes.json();
+      // Find KsefTokenEncryption key
+      const tokenEncKey = keysData?.certificates?.find?.((c: any) => c.usage === 'KsefTokenEncryption')
+        || keysData?.items?.find?.((c: any) => c.usage === 'KsefTokenEncryption')
+        || keysData?.[0];
+      if (tokenEncKey?.pem || tokenEncKey?.certificate) {
+        ksefPublicKeyPem = tokenEncKey.pem || tokenEncKey.certificate;
+        publicKeyId = tokenEncKey.id || tokenEncKey.publicKeyId || '';
+        log(`Klucz publiczny pobrany (id: ${publicKeyId || 'brak'})`);
+      } else {
+        // Fallback: try direct PEM
+        const keysText = JSON.stringify(keysData);
+        log(`Odpowiedź kluczy: ${keysText.substring(0, 300)}`);
+        // Try to extract any PEM from response
+        const pemMatch = keysText.match(/-----BEGIN[^-]*-----[\s\S]*?-----END[^-]*-----/);
+        if (pemMatch) {
+          ksefPublicKeyPem = pemMatch[0];
+          log('Wyekstrahowano klucz PEM z odpowiedzi');
+        } else {
+          return NextResponse.json({ error: 'Nie znaleziono klucza publicznego KSeF w odpowiedzi', details: keysText.substring(0, 500), logs }, { status: 502 });
+        }
+      }
+    } catch (e: any) {
+      log(`Błąd połączenia: ${e?.message}`);
+      return NextResponse.json({ error: 'Nie można połączyć się z serwerem KSeF.', logs }, { status: 502 });
+    }
+
+    // ============================================
+    // KROK 2: AuthChallenge (API v2)
+    // ============================================
+    log('Krok 2: Pobieranie wyzwania autoryzacyjnego (v2)...');
     let challengeRes: Response;
     try {
-      challengeRes = await fetch(`${baseUrl}/api/online/Session/AuthorisationChallenge`, {
+      challengeRes = await fetch(`${baseUrl}/api/v2/auth/challenge`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
         },
-        body: JSON.stringify({
-          contextIdentifier: {
-            type: 'onip',
-            identifier: config.nip,
-          },
-        }),
+        body: JSON.stringify({}),
       });
     } catch (e: any) {
       log(`Błąd połączenia z KSeF: ${e?.message}`);
-      return NextResponse.json({
-        error: 'Nie można połączyć się z serwerem KSeF. Sprawdź połączenie internetowe kontenera Docker.',
-        logs,
-      }, { status: 502 });
+      return NextResponse.json({ error: 'Nie można połączyć się z serwerem KSeF.', logs }, { status: 502 });
     }
 
     const challengeParsed = await safeParseResponse(challengeRes);
     if (!challengeRes.ok) {
-      log(`Błąd challenge: ${challengeRes.status} — ${challengeParsed.text.substring(0, 500)}`);
-      return NextResponse.json({
-        error: `Błąd autoryzacji KSeF (challenge): HTTP ${challengeRes.status}`,
-        details: challengeParsed.text.substring(0, 1000),
-        logs,
-      }, { status: 502 });
+      log(`Błąd challenge: HTTP ${challengeRes.status} — ${challengeParsed.text.substring(0, 500)}`);
+      return NextResponse.json({ error: `Błąd autoryzacji KSeF (challenge): HTTP ${challengeRes.status}`, details: challengeParsed.text.substring(0, 1000), logs }, { status: 502 });
     }
 
-    let challenge: string;
-    let timestamp: string;
-    if (challengeParsed.isJson) {
-      challenge = challengeParsed.json?.challenge ?? '';
-      timestamp = challengeParsed.json?.timestamp ?? '';
-    } else {
-      challenge = xmlVal(challengeParsed.text, 'Challenge');
-      timestamp = xmlVal(challengeParsed.text, 'Timestamp');
-    }
+    const challenge = challengeParsed.json?.challenge ?? '';
+    const timestampMs = challengeParsed.json?.timestampMs ?? challengeParsed.json?.timestamp ?? '';
 
     if (!challenge) {
-      log('Brak wyzwania w odpowiedzi KSeF');
+      log(`Brak challenge w odpowiedzi: ${challengeParsed.text.substring(0, 500)}`);
       return NextResponse.json({ error: 'Brak wyzwania w odpowiedzi KSeF', details: challengeParsed.text.substring(0, 500), logs }, { status: 502 });
     }
-    log(`Wyzwanie otrzymane, timestamp: ${timestamp}`);
+    log(`Wyzwanie otrzymane, timestampMs: ${timestampMs}`);
 
     // ============================================
-    // KROK 2: Szyfrowanie tokenu kluczem publicznym KSeF
+    // KROK 3: Szyfrowanie tokenu (token|timestampMs)
     // ============================================
-    log('Krok 2: Przygotowanie tokenu...');
+    log('Krok 3: Szyfrowanie tokenu...');
     let encryptedTokenBase64 = '';
-    let useRawToken = false;
 
     try {
-      const pubKeyRes = await fetch(`${baseUrl}/api/online/Session/CertificatePem`);
-      if (pubKeyRes.ok) {
-        const pubKeyText = await pubKeyRes.text();
-        // Check if it's a valid PEM key
-        if (pubKeyText.includes('BEGIN')) {
-          const encrypted = crypto.publicEncrypt(
-            {
-              key: pubKeyText,
-              padding: crypto.constants.RSA_PKCS1_OAEP_PADDING,
-              oaepHash: 'sha256',
-            },
-            Buffer.from(config.tokenEncrypted, 'utf-8')
-          );
-          encryptedTokenBase64 = encrypted.toString('base64');
-          log('Token zaszyfrowany kluczem publicznym KSeF');
-        } else {
-          log('Odpowiedź CertificatePem nie zawiera klucza PEM — używam tokenu bez szyfrowania');
-          useRawToken = true;
-        }
-      } else {
-        log(`CertificatePem: HTTP ${pubKeyRes.status} — używam tokenu bez szyfrowania`);
-        useRawToken = true;
+      const tokenPayload = `${config.tokenEncrypted}|${timestampMs}`;
+      // Ensure PEM has proper line breaks
+      let pemKey = ksefPublicKeyPem;
+      if (!pemKey.includes('\n')) {
+        pemKey = pemKey.replace(/(-----BEGIN[^-]+-----)/, '$1\n').replace(/(-----END[^-]+-----)/, '\n$1');
       }
-    } catch (e: any) {
-      log(`Błąd szyfrowania: ${e?.message} — używam tokenu bez szyfrowania`);
-      useRawToken = true;
-    }
-
-    const tokenForRequest = useRawToken ? config.tokenEncrypted : encryptedTokenBase64;
-
-    // ============================================
-    // KROK 3: InitToken (XML → JSON)
-    // ============================================
-    log('Krok 3: Inicjalizacja sesji KSeF...');
-    const initXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<ns3:InitSessionTokenRequest
-  xmlns="http://ksef.mf.gov.pl/schema/gtw/svc/online/types/2021/10/01/0001"
-  xmlns:ns2="http://ksef.mf.gov.pl/schema/gtw/svc/types/2021/10/01/0001"
-  xmlns:ns3="http://ksef.mf.gov.pl/schema/gtw/svc/online/auth/request/2021/10/01/0001">
-  <ns3:Context>
-    <Challenge>${challenge}</Challenge>
-    <Identifier xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:type="ns2:SubjectIdentifierByCompanyType">
-      <ns2:Identifier>${config.nip}</ns2:Identifier>
-    </Identifier>
-    <DocumentType>
-      <ns2:Service>KSeF</ns2:Service>
-      <ns2:FormCode>
-        <ns2:SystemCode>FA (2)</ns2:SystemCode>
-        <ns2:SchemaVersion>1-0E</ns2:SchemaVersion>
-        <ns2:TargetNamespace>http://crd.gov.pl/wzor/2023/06/29/12648/</ns2:TargetNamespace>
-        <ns2:Value>FA</ns2:Value>
-      </ns2:FormCode>
-    </DocumentType>
-    <Token>${tokenForRequest}</Token>
-  </ns3:Context>
-</ns3:InitSessionTokenRequest>`;
-
-    let initRes: Response;
-    try {
-      initRes = await fetch(`${baseUrl}/api/online/Session/InitToken`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/octet-stream',
-          'Accept': 'application/json',
+      const encrypted = crypto.publicEncrypt(
+        {
+          key: pemKey,
+          padding: crypto.constants.RSA_PKCS1_OAEP_PADDING,
+          oaepHash: 'sha256',
         },
-        body: initXml,
-      });
+        Buffer.from(tokenPayload, 'utf-8')
+      );
+      encryptedTokenBase64 = encrypted.toString('base64');
+      log('Token zaszyfrowany kluczem publicznym KSeF (RSA-OAEP SHA-256)');
     } catch (e: any) {
-      log(`Błąd połączenia InitToken: ${e?.message}`);
-      return NextResponse.json({ error: 'Błąd połączenia z KSeF (InitToken)', logs }, { status: 502 });
-    }
-
-    const initParsed = await safeParseResponse(initRes);
-    if (!initRes.ok) {
-      log(`Błąd InitToken: HTTP ${initRes.status}`);
-      log(`Odpowiedź: ${initParsed.text.substring(0, 500)}`);
+      log(`Błąd szyfrowania: ${e?.message}`);
       return NextResponse.json({
-        error: `Błąd autoryzacji KSeF (InitToken): HTTP ${initRes.status}`,
-        details: initParsed.text.substring(0, 1000),
+        error: 'Błąd szyfrowania tokenu KSeF. Sprawdź czy token jest poprawny.',
+        details: e?.message,
         logs,
-        hint: 'Sprawdź czy token KSeF jest poprawny i aktualny. Token generujesz na portalu KSeF (ksef.mf.gov.pl lub ksef-test.mf.gov.pl). Upewnij się, że NIP w konfiguracji zgadza się z NIP dla którego wygenerowano token.',
-      }, { status: 502 });
+      }, { status: 500 });
     }
-
-    let sessionToken = '';
-    let referenceNumber = '';
-    if (initParsed.isJson) {
-      sessionToken = initParsed.json?.sessionToken?.token ?? '';
-      referenceNumber = initParsed.json?.referenceNumber ?? '';
-    } else {
-      sessionToken = xmlVal(initParsed.text, 'token') || xmlVal(initParsed.text, 'Token');
-      referenceNumber = xmlVal(initParsed.text, 'referenceNumber') || xmlVal(initParsed.text, 'ReferenceNumber');
-    }
-
-    if (!sessionToken) {
-      log('Brak tokenu sesji w odpowiedzi');
-      log(`Odpowiedź: ${initParsed.text.substring(0, 500)}`);
-      return NextResponse.json({
-        error: 'Autoryzacja w KSeF nie zwróciła tokenu sesji',
-        details: initParsed.text.substring(0, 500),
-        logs,
-      }, { status: 502 });
-    }
-    log(`Sesja KSeF aktywna: ref=${referenceNumber}`);
 
     // ============================================
-    // KROK 4: Query Invoice Sync (JSON → JSON)
+    // KROK 4: Autoryzacja tokenem KSeF (POST /auth/ksef-token)
     // ============================================
-    log('Krok 4: Wyszukiwanie faktur kosztowych...');
-    const queryBody = {
-      queryCriteria: {
-        subjectType: 'subject2',
-        type: 'incremental',
-        acquisitionTimestampThresholdFrom: `${dateFrom}T00:00:00`,
-        acquisitionTimestampThresholdTo: `${dateTo}T23:59:59`,
+    log('Krok 4: Autoryzacja tokenem KSeF...');
+    const authTokenBody: any = {
+      challenge,
+      contextIdentifier: {
+        type: 'Nip',
+        value: config.nip,
       },
+      encryptedToken: encryptedTokenBase64,
     };
+    if (publicKeyId) {
+      authTokenBody.publicKeyId = publicKeyId;
+    }
 
-    let queryRes: Response;
+    let authRes: Response;
     try {
-      queryRes = await fetch(`${baseUrl}/api/online/Query/Invoice/Sync?PageSize=100&PageOffset=0`, {
+      authRes = await fetch(`${baseUrl}/api/v2/auth/ksef-token`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
-          'SessionToken': sessionToken,
         },
-        body: JSON.stringify(queryBody),
+        body: JSON.stringify(authTokenBody),
       });
     } catch (e: any) {
-      log(`Błąd połączenia Query: ${e?.message}`);
-      return NextResponse.json({ error: 'Błąd wyszukiwania faktur w KSeF', logs }, { status: 502 });
+      log(`Błąd połączenia auth/ksef-token: ${e?.message}`);
+      return NextResponse.json({ error: 'Błąd połączenia z KSeF (auth/ksef-token)', logs }, { status: 502 });
     }
 
-    const queryParsed = await safeParseResponse(queryRes);
-    if (!queryRes.ok) {
-      log(`Błąd Query: HTTP ${queryRes.status}`);
-      log(`Odpowiedź: ${queryParsed.text.substring(0, 500)}`);
+    const authParsed = await safeParseResponse(authRes);
+    if (!authRes.ok && authRes.status !== 202) {
+      log(`Błąd auth/ksef-token: HTTP ${authRes.status}`);
+      log(`Odpowiedź: ${authParsed.text.substring(0, 500)}`);
       return NextResponse.json({
-        error: `Błąd wyszukiwania faktur: HTTP ${queryRes.status}`,
-        details: queryParsed.text.substring(0, 500),
+        error: `Błąd autoryzacji KSeF: HTTP ${authRes.status}`,
+        details: authParsed.text.substring(0, 1000),
         logs,
+        hint: 'Sprawdź czy token KSeF jest poprawny i aktualny. Token generujesz w MCU na portalu KSeF. Upewnij się, że NIP w konfiguracji zgadza się z NIP dla którego wygenerowano token.',
       }, { status: 502 });
     }
 
-    // Parse invoice list
-    let invoiceHeaders: any[] = [];
-    if (queryParsed.isJson) {
-      invoiceHeaders = queryParsed.json?.invoiceHeaderList ?? queryParsed.json?.invoicesList ?? [];
-      // Check nested structures
-      if (invoiceHeaders.length === 0 && queryParsed.json?.numberOfElements > 0) {
-        invoiceHeaders = queryParsed.json?.items ?? [];
-      }
+    const authenticationToken = authParsed.json?.authenticationToken?.token ?? authParsed.json?.authenticationToken ?? '';
+    const referenceNumber = authParsed.json?.referenceNumber ?? '';
+
+    if (!authenticationToken) {
+      log(`Brak authenticationToken w odpowiedzi: ${authParsed.text.substring(0, 500)}`);
+      return NextResponse.json({ error: 'KSeF nie zwrócił tokenu autoryzacji', details: authParsed.text.substring(0, 500), logs }, { status: 502 });
     }
-    log(`Znaleziono ${invoiceHeaders.length} faktur w KSeF`);
+    log(`Autoryzacja przyjęta, referenceNumber: ${referenceNumber}`);
 
     // ============================================
-    // KROK 5: Import faktur do bazy
+    // KROK 5: Sprawdzenie statusu autoryzacji (polling)
+    // ============================================
+    log('Krok 5: Oczekiwanie na potwierdzenie autoryzacji...');
+    let authConfirmed = false;
+    for (let attempt = 0; attempt < 15; attempt++) {
+      await sleep(2000);
+      try {
+        const statusRes = await fetch(`${baseUrl}/api/v2/auth/${referenceNumber}`, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${authenticationToken}`,
+            'Accept': 'application/json',
+          },
+        });
+        if (statusRes.status === 200) {
+          authConfirmed = true;
+          log('Autoryzacja potwierdzona');
+          break;
+        } else if (statusRes.status === 202) {
+          // Still processing
+          log(`Autoryzacja w toku (próba ${attempt + 1})...`);
+        } else {
+          const statusText = await statusRes.text();
+          log(`Status autoryzacji: HTTP ${statusRes.status} — ${statusText.substring(0, 200)}`);
+          // 4xx means error, stop
+          if (statusRes.status >= 400) break;
+        }
+      } catch (e: any) {
+        log(`Błąd sprawdzania statusu: ${e?.message}`);
+      }
+    }
+
+    if (!authConfirmed) {
+      return NextResponse.json({ error: 'Timeout — autoryzacja KSeF nie została potwierdzona w ciągu 30s', logs }, { status: 504 });
+    }
+
+    // ============================================
+    // KROK 6: Wymiana na accessToken (POST /auth/token/redeem)
+    // ============================================
+    log('Krok 6: Wymiana tokenu na accessToken...');
+    let accessToken = '';
+
+    try {
+      const redeemRes = await fetch(`${baseUrl}/api/v2/auth/token/redeem`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${authenticationToken}`,
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({}),
+      });
+
+      const redeemParsed = await safeParseResponse(redeemRes);
+      if (!redeemRes.ok) {
+        log(`Błąd token/redeem: HTTP ${redeemRes.status} — ${redeemParsed.text.substring(0, 300)}`);
+        return NextResponse.json({ error: `Błąd wymiany tokenu: HTTP ${redeemRes.status}`, details: redeemParsed.text.substring(0, 500), logs }, { status: 502 });
+      }
+
+      accessToken = redeemParsed.json?.accessToken ?? '';
+      if (!accessToken) {
+        log(`Brak accessToken: ${redeemParsed.text.substring(0, 300)}`);
+        return NextResponse.json({ error: 'KSeF nie zwrócił accessToken', details: redeemParsed.text.substring(0, 300), logs }, { status: 502 });
+      }
+      log('AccessToken JWT otrzymany');
+    } catch (e: any) {
+      log(`Błąd token/redeem: ${e?.message}`);
+      return NextResponse.json({ error: 'Błąd wymiany tokenu KSeF', logs }, { status: 502 });
+    }
+
+    // ============================================
+    // KROK 7: Wyszukiwanie faktur (POST /invoices/query/metadata)
+    // ============================================
+    log('Krok 7: Wyszukiwanie faktur kosztowych...');
+    const queryBody = {
+      subjectType: 'subject2',
+      dateRange: {
+        dateType: 'acquisition',
+        from: `${dateFrom}T00:00:00Z`,
+        to: `${dateTo}T23:59:59Z`,
+      },
+    };
+
+    let allInvoices: any[] = [];
+    let pageOffset = 0;
+    const pageSize = 100;
+    let hasMore = true;
+
+    while (hasMore) {
+      let queryRes: Response;
+      try {
+        queryRes = await fetch(`${baseUrl}/api/v2/invoices/query/metadata?PageSize=${pageSize}&PageOffset=${pageOffset}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'Authorization': `Bearer ${accessToken}`,
+          },
+          body: JSON.stringify(queryBody),
+        });
+      } catch (e: any) {
+        log(`Błąd wyszukiwania faktur: ${e?.message}`);
+        return NextResponse.json({ error: 'Błąd wyszukiwania faktur w KSeF', logs }, { status: 502 });
+      }
+
+      const queryParsed = await safeParseResponse(queryRes);
+      if (!queryRes.ok) {
+        log(`Błąd zapytania faktur: HTTP ${queryRes.status}`);
+        log(`Odpowiedź: ${queryParsed.text.substring(0, 500)}`);
+        return NextResponse.json({
+          error: `Błąd wyszukiwania faktur: HTTP ${queryRes.status}`,
+          details: queryParsed.text.substring(0, 500),
+          logs,
+        }, { status: 502 });
+      }
+
+      // Parse invoices from response
+      const invoices = queryParsed.json?.invoiceHeaderList
+        ?? queryParsed.json?.invoices
+        ?? queryParsed.json?.items
+        ?? queryParsed.json?.elements
+        ?? [];
+      allInvoices = allInvoices.concat(invoices);
+
+      const totalElements = queryParsed.json?.numberOfElements ?? queryParsed.json?.totalCount ?? invoices.length;
+      log(`Strona ${pageOffset / pageSize + 1}: ${invoices.length} faktur (razem: ${allInvoices.length}/${totalElements})`);
+
+      if (invoices.length < pageSize || allInvoices.length >= totalElements) {
+        hasMore = false;
+      } else {
+        pageOffset += pageSize;
+      }
+    }
+
+    log(`Znaleziono łącznie ${allInvoices.length} faktur w KSeF`);
+
+    // ============================================
+    // KROK 8: Import faktur do bazy
     // ============================================
     const FUEL_KEYWORDS = ['BP', 'ORLEN', 'LOTOS', 'SHELL', 'CIRCLE K', 'AMIC', 'MOYA', 'STACJA PALIW', 'FUEL', 'MOL', 'TOTAL', 'BENZYNA', 'DIESEL', 'ON ', 'PB95', 'PB98', 'LPG'];
 
     let imported = 0;
     let skipped = 0;
 
-    for (const header of invoiceHeaders) {
-      const ksefNumber = header?.invoiceReferenceNumber ?? header?.ksefReferenceNumber ?? header?.ksefNumber ?? '';
+    for (const header of allInvoices) {
+      const ksefNumber = header?.ksefReferenceNumber ?? header?.invoiceReferenceNumber ?? header?.ksefNumber ?? '';
       const invoiceNumber = header?.invoiceNumber ?? '';
 
       // Duplikat?
@@ -293,10 +371,10 @@ export async function POST(request: Request) {
         if (existing) { skipped++; continue; }
       }
 
-      const issueDate = header?.invoicingDate ?? header?.invoiceDate ?? header?.acquisitionDate ?? dateFrom;
-      const sellerName = header?.subjectBy?.issuedByName ?? header?.subjectByName ?? header?.sellerName ?? '';
-      const sellerNip = header?.subjectBy?.issuedByIdentifier ?? header?.subjectByIdentifier ?? header?.sellerNip ?? '';
-      const grossAmount = parseFloat(header?.invoiceGrossValue ?? header?.grossValue ?? header?.totalAmount ?? '0') || 0;
+      const issueDate = header?.invoicingDate ?? header?.invoiceDate ?? header?.acquisitionTimestamp ?? dateFrom;
+      const sellerName = header?.subjectBy?.issuedByName ?? header?.subjectByName ?? header?.sellerName ?? header?.subjectBy?.name ?? '';
+      const sellerNip = header?.subjectBy?.issuedByIdentifier ?? header?.subjectByIdentifier ?? header?.sellerNip ?? header?.subjectBy?.identifier ?? '';
+      const grossAmount = parseFloat(header?.invoiceGrossValue ?? header?.grossValue ?? header?.totalAmount ?? header?.amount ?? '0') || 0;
       const netAmount = parseFloat(header?.invoiceNetValue ?? header?.netValue ?? '0') || 0;
       const vatAmount = grossAmount - netAmount;
       const description = JSON.stringify(header).toUpperCase();
@@ -326,24 +404,11 @@ export async function POST(request: Request) {
 
     log(`Import zakończony: ${imported} nowych, ${skipped} pominięto (duplikaty)`);
 
-    // ============================================
-    // KROK 6: Zamknięcie sesji
-    // ============================================
-    try {
-      await fetch(`${baseUrl}/api/online/Session/Terminate`, {
-        method: 'GET',
-        headers: { 'SessionToken': sessionToken },
-      });
-      log('Sesja KSeF zamknięta');
-    } catch {
-      log('Ostrzeżenie: nie udało się zamknąć sesji KSeF (nie krytyczne)');
-    }
-
     return NextResponse.json({
       success: true,
       imported,
       skipped,
-      total: invoiceHeaders.length,
+      total: allInvoices.length,
       logs,
     });
 
