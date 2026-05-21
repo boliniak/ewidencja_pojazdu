@@ -22,7 +22,7 @@ services:
   app:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: deploy/Dockerfile
     container_name: ewidencja_app
     restart: unless-stopped
     ports:
@@ -34,6 +34,7 @@ services:
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_API_URL: ${OPENAI_API_URL:-https://api.openai.com/v1}
       OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
+      ABACUSAI_API_KEY: ${ABACUSAI_API_KEY:-}
     volumes:
       - uploads_data:/app/uploads
       - backups_data:/app/backups
