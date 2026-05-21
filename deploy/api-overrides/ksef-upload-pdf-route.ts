@@ -12,6 +12,13 @@ export async function POST(request: Request) {
     const session = await getServerSession(authOptions);
     if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
+    // Sprawdź czy OPENAI_API_KEY jest skonfigurowany
+    if (!process.env.OPENAI_API_KEY) {
+      return NextResponse.json({ 
+        error: 'Klucz API LLM nie jest skonfigurowany. Ustaw OPENAI_API_KEY w pliku .env w katalogu deploy/' 
+      }, { status: 500 });
+    }
+
     const formData = await request.formData();
     const file = formData.get('file') as File;
     if (!file) return NextResponse.json({ error: 'Brak pliku' }, { status: 400 });
@@ -60,21 +67,40 @@ Odpowiedz TYLKO czystym JSON w formacie:
 }
 Nie używaj markdown, code blocks ani formatowania.`;
 
+    // Próbuj wysyłać jako "file" (OpenAI native), fallback na "image_url" (kompatybilność)
     let content: string;
     try {
+      // Sposób 1: OpenAI native "file" type
       content = await callLlm(
         [{
           role: 'user',
           content: [
-            { type: 'image_url', image_url: { url: `data:application/pdf;base64,${base64String}` } },
+            { type: 'file', file: { filename: file.name, file_data: `data:application/pdf;base64,${base64String}` } },
             { type: 'text', text: parsePrompt },
           ],
         }],
         { maxTokens: 4000, responseFormat: { type: 'json_object' } }
       );
-    } catch (llmErr: any) {
-      console.error('LLM API error:', llmErr?.message ?? llmErr);
-      return NextResponse.json({ error: 'Nie udało się przeanalizować PDF. Sprawdź konfigurację API LLM (OPENAI_API_KEY).' }, { status: 502 });
+    } catch (firstErr: any) {
+      console.error('LLM file type failed, trying image_url fallback:', firstErr?.message);
+      try {
+        // Sposób 2: image_url fallback (niektóre API akceptują PDF jako image_url)
+        content = await callLlm(
+          [{
+            role: 'user',
+            content: [
+              { type: 'image_url', image_url: { url: `data:application/pdf;base64,${base64String}` } },
+              { type: 'text', text: parsePrompt },
+            ],
+          }],
+          { maxTokens: 4000, responseFormat: { type: 'json_object' } }
+        );
+      } catch (secondErr: any) {
+        console.error('LLM image_url fallback also failed:', secondErr?.message);
+        return NextResponse.json({ 
+          error: `Nie udało się przeanalizować PDF. Błąd API: ${firstErr?.message?.substring(0, 200)}` 
+        }, { status: 502 });
+      }
     }
 
     let parsed: any = {};
@@ -133,6 +159,6 @@ Nie używaj markdown, code blocks ani formatowania.`;
 
   } catch (error: any) {
     console.error('PDF upload error:', error);
-    return NextResponse.json({ error: 'Błąd przetwarzania pliku PDF' }, { status: 500 });
+    return NextResponse.json({ error: `Błąd przetwarzania pliku PDF: ${error?.message?.substring(0, 200) ?? 'nieznany błąd'}` }, { status: 500 });
   }
 }

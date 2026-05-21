@@ -3,9 +3,16 @@
  * Obsługuje: OpenAI, Azure OpenAI, Ollama, LM Studio, i inne kompatybilne endpointy
  */
 
+interface LlmContentPart {
+  type: string;
+  text?: string;
+  image_url?: { url: string };
+  file?: { filename: string; file_data: string };
+}
+
 interface LlmMessage {
   role: 'system' | 'user' | 'assistant';
-  content: string | Array<{ type: string; text?: string; image_url?: { url: string } }>;
+  content: string | LlmContentPart[];
 }
 
 interface LlmOptions {
