@@ -19,6 +19,15 @@ interface VerificationResult {
   status: string;
   minConsumption: number;
   maxConsumption: number;
+  ksefLitersPeriod: number;
+  maxAllowedLiters: number | null;
+  litersOverLimit: number;
+  allTime: {
+    totalKm: number;
+    totalLiters: number;
+    ksefLiters: number;
+    avgConsumption: number | null;
+  };
 }
 
 export function VerificationClient() {
@@ -100,6 +109,8 @@ export function VerificationClient() {
                     <p className="text-sm text-muted-foreground">{[r?.vehicle?.brand, r?.vehicle?.model].filter(Boolean).join(' ')}</p>
                   </CardHeader>
                   <CardContent>
+                    {/* Wybrany okres */}
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">Wybrany okres</p>
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <div className="flex justify-between text-sm"><span className="text-muted-foreground">Przejechano</span><span className="font-mono font-bold">{r?.totalKm?.toFixed?.(1) ?? '0'} km</span></div>
@@ -110,6 +121,32 @@ export function VerificationClient() {
                         <div className="flex justify-between text-sm"><span className="text-muted-foreground">Koszt paliwa</span><span className="font-mono">{r?.totalFuelCost?.toFixed?.(2) ?? '0'} zł</span></div>
                       </div>
                     </div>
+
+                    {/* Limit litrów */}
+                    {r?.maxAllowedLiters !== null && r?.maxAllowedLiters !== undefined && (
+                      <div className="mt-3 p-2 rounded-lg bg-muted/50 text-sm">
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Maks. dopuszczalne litry</span>
+                          <span className="font-mono">{r.maxAllowedLiters.toFixed(1)} l</span>
+                        </div>
+                        {r?.litersOverLimit > 0 && (
+                          <div className="flex justify-between text-red-600 font-medium mt-1">
+                            <span>⚠ Przekroczenie limitu</span>
+                            <span className="font-mono">+{r.litersOverLimit.toFixed(1)} l</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* KSeF litry w okresie */}
+                    {(r?.ksefLitersPeriod ?? 0) > 0 && (
+                      <div className="mt-2 flex justify-between text-sm">
+                        <span className="text-muted-foreground">Litry z FV KSeF (okres)</span>
+                        <span className="font-mono">{r.ksefLitersPeriod.toFixed(1)} l</span>
+                      </div>
+                    )}
+
+                    {/* Spalanie */}
                     <div className="mt-4 pt-4 border-t">
                       <div className="flex items-center justify-between">
                         <span className="text-sm font-medium">Średnie spalanie</span>
@@ -126,6 +163,21 @@ export function VerificationClient() {
                           />
                         </div>
                       )}
+                    </div>
+
+                    {/* Od początku ewidencji */}
+                    <div className="mt-4 pt-4 border-t">
+                      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">Od początku ewidencji</p>
+                      <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
+                        <div className="flex justify-between"><span className="text-muted-foreground">Łącznie km</span><span className="font-mono">{r?.allTime?.totalKm?.toFixed?.(1) ?? '0'}</span></div>
+                        <div className="flex justify-between"><span className="text-muted-foreground">Łącznie litrów</span><span className="font-mono">{r?.allTime?.totalLiters?.toFixed?.(1) ?? '0'}</span></div>
+                        {(r?.allTime?.ksefLiters ?? 0) > 0 && (
+                          <div className="flex justify-between col-span-2"><span className="text-muted-foreground">Litry z KSeF (FV paliw.)</span><span className="font-mono">{r.allTime.ksefLiters.toFixed(1)} l</span></div>
+                        )}
+                        <div className="flex justify-between col-span-2"><span className="text-muted-foreground">Śr. spalanie (cały okres)</span>
+                          <span className="font-mono font-medium">{r?.allTime?.avgConsumption?.toFixed?.(1) ?? '—'} l/100km</span>
+                        </div>
+                      </div>
                     </div>
                   </CardContent>
                 </Card>
