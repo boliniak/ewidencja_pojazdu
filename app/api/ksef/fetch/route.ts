@@ -477,6 +477,7 @@ export async function POST(request: Request) {
 
     let imported = 0;
     let skipped = 0;
+    let updated = 0;
 
     for (const header of allInvoices) {
       // API v2 InvoiceMetadata fields:
@@ -487,10 +488,16 @@ export async function POST(request: Request) {
       const ksefNumber = typeof ksefNumberObj === 'object' ? (ksefNumberObj?.value ?? ksefNumberObj?.number ?? '') : (ksefNumberObj ?? header?.ksefReferenceNumber ?? '');
       const invoiceNumber = header?.invoiceNumber ?? '';
 
-      // Duplikat?
+      // Duplikat? Jeśli istnieje ale brakuje litrów paliwa — uzupełnij
+      let existingInvoice: any = null;
       if (ksefNumber) {
-        const existing = await prisma.ksefInvoice.findFirst({ where: { ksefNumber } });
-        if (existing) { skipped++; continue; }
+        existingInvoice = await prisma.ksefInvoice.findFirst({ where: { ksefNumber } });
+        if (existingInvoice && existingInvoice.fuelLiters) {
+          // Kompletny duplikat — mamy już litry
+          skipped++;
+          continue;
+        }
+        // Jeśli existingInvoice istnieje ale brak litrów — kontynuuj żeby uzupełnić
       }
 
       // API v2: issueDate (YYYY-MM-DD), seller: { nip, name }, grossAmount/netAmount/vatAmount (numbers)
@@ -563,31 +570,46 @@ export async function POST(request: Request) {
         }
       }
 
-      await prisma.ksefInvoice.create({
-        data: {
-          ksefNumber,
-          invoiceNumber,
-          issueDate: new Date(issueDate),
-          sellerName,
-          sellerNip,
-          grossAmount,
-          netAmount,
-          vatAmount,
-          isFuel,
-          fuelLiters,
-          fuelPricePerLiter,
-          rawData: JSON.stringify(header),
-        },
-      });
-      imported++;
+      if (existingInvoice) {
+        // Aktualizuj istniejącą fakturę — uzupełnij brakujące litry
+        await prisma.ksefInvoice.update({
+          where: { id: existingInvoice.id },
+          data: {
+            isFuel,
+            ...(fuelLiters ? { fuelLiters } : {}),
+            ...(fuelPricePerLiter ? { fuelPricePerLiter } : {}),
+          },
+        });
+        updated++;
+        if (fuelLiters) log(`  → Uzupełniono litry: ${invoiceNumber || ksefNumber} — ${fuelLiters} L`);
+      } else {
+        await prisma.ksefInvoice.create({
+          data: {
+            ksefNumber,
+            invoiceNumber,
+            issueDate: new Date(issueDate),
+            sellerName,
+            sellerNip,
+            grossAmount,
+            netAmount,
+            vatAmount,
+            isFuel,
+            fuelLiters,
+            fuelPricePerLiter,
+            rawData: JSON.stringify(header),
+          },
+        });
+        imported++;
+      }
       if (isFuel) log(`  → FV paliwowa: ${invoiceNumber || ksefNumber} od ${sellerName} — ${fuelLiters ?? '?'} L`);
     }
 
-    log(`Import zakończony: ${imported} nowych, ${skipped} pominięto (duplikaty)`);
+    log(`Import zakończony: ${imported} nowych, ${updated} zaktualizowanych, ${skipped} pominięto`);
 
     return NextResponse.json({
       success: true,
       imported,
+      updated,
       skipped,
       total: allInvoices.length,
       logs,
