@@ -21,19 +21,20 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
 # === Podmiana modułów platformowych na lokalne ===
-# Replace S3/AWS with local storage
-COPY deploy/lib/local-storage.ts ./lib/local-storage.ts
-COPY deploy/lib/pdf-generator.ts ./lib/pdf-generator.ts
-COPY deploy/lib/llm-client.ts ./lib/llm-client.ts
-# Replace API routes with self-hosted versions
-COPY deploy/api-overrides/bank-upload-route.ts ./app/api/bank/upload/route.ts
-COPY deploy/api-overrides/reports-generate-pdf-route.ts ./app/api/reports/generate-pdf/route.ts
-# Remove platform-only files
-RUN rm -f lib/s3.ts lib/aws-config.ts
-# Remove Abacus script tag from layout
-RUN sed -i '/<script.*appllm-lib.js.*<\/script>/d' app/layout.tsx
-# Fix tsconfig - exclude deploy dir
-RUN sed -i 's/"exclude": \["node_modules"\]/"exclude": ["node_modules", "deploy"]/' tsconfig.json 2>/dev/null || true
+# Use RUN cp (not COPY) to avoid Docker layer caching issues with overrides
+RUN cp deploy/lib/local-storage.ts lib/local-storage.ts && \
+    cp deploy/lib/pdf-generator.ts lib/pdf-generator.ts && \
+    cp deploy/lib/llm-client.ts lib/llm-client.ts && \
+    cp deploy/api-overrides/bank-upload-route.ts app/api/bank/upload/route.ts && \
+    cp deploy/api-overrides/reports-generate-pdf-route.ts app/api/reports/generate-pdf/route.ts && \
+    rm -f lib/s3.ts lib/aws-config.ts && \
+    sed -i '/<script.*appllm-lib.js.*<\/script>/d' app/layout.tsx && \
+    sed -i 's/"exclude": \["node_modules"\]/"exclude": ["node_modules", "deploy"]/' tsconfig.json 2>/dev/null || true
+# Verify overrides applied correctly
+RUN echo "=== Verifying overrides ===" && \
+    grep -q 'local-storage' app/api/bank/upload/route.ts && echo "✓ bank-upload override OK" || (echo "✗ bank-upload override FAILED" && exit 1) && \
+    grep -q 'pdf-generator' app/api/reports/generate-pdf/route.ts && echo "✓ reports-pdf override OK" || (echo "✗ reports-pdf override FAILED" && exit 1) && \
+    test ! -f lib/s3.ts && echo "✓ s3.ts removed OK" || (echo "✗ s3.ts still exists" && exit 1)
 
 RUN npx prisma generate
 
