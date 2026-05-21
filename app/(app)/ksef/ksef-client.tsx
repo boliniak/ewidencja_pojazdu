@@ -141,7 +141,7 @@ export function KsefClient() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2 text-sm">
-                  <Badge variant="secondary">{config?.environment === 'PROD' ? 'Produkcja' : 'Test'}</Badge>
+                  <Badge variant="secondary">{config?.environment === 'PROD' ? 'Produkcja' : config?.environment === 'DEMO' ? 'Demo' : 'Test'}</Badge>
                   <span className="text-muted-foreground">NIP: {config?.nip || '—'}</span>
                 </div>
                 {fetchLogs.length > 0 && (
@@ -249,7 +249,7 @@ export function KsefClient() {
                   <Label>Środowisko</Label>
                   <Select value={configForm.environment} onValueChange={(v: string) => setConfigForm(p => ({...(p ?? {}), environment: v}))}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent><SelectItem value="TEST">Testowe</SelectItem><SelectItem value="PROD">Produkcyjne</SelectItem></SelectContent>
+                    <SelectContent><SelectItem value="TEST">Testowe</SelectItem><SelectItem value="DEMO">Demo (przedprodukcyjne)</SelectItem><SelectItem value="PROD">Produkcyjne</SelectItem></SelectContent>
                   </Select>
                 </div>
               </div>

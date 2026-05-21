@@ -5,10 +5,11 @@ import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/prisma';
 import crypto from 'crypto';
 
-// KSeF API v2 base URLs (API v1 deactivated 01.02.2026)
+// KSeF API v2 base URLs (nowe adresy od KSeF 2.0, stare domeny wyłączone 01.02.2026)
 const KSEF_URLS: Record<string, string> = {
-  TEST: 'https://ksef-test.mf.gov.pl',
-  PROD: 'https://ksef.mf.gov.pl',
+  TEST: 'https://api-test.ksef.mf.gov.pl',
+  DEMO: 'https://api-demo.ksef.mf.gov.pl',
+  PROD: 'https://api.ksef.mf.gov.pl',
 };
 
 // Safely parse response — handle both JSON and non-JSON
