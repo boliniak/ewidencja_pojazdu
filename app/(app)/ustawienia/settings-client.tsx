@@ -106,7 +106,7 @@ export function SettingsClient() {
                   <Input type="number" step="0.1" value={settings?.MAX_CONSUMPTION ?? '14'} onChange={(e: any) => updateSetting('MAX_CONSUMPTION', e?.target?.value ?? '14')} />
                 </div>
               </div>
-              <Button onClick={saveSettings}><Save className="w-4 h-4 mr-1" /> Zapisz ustawienia</Button>
+              {isAdmin && <Button onClick={saveSettings}><Save className="w-4 h-4 mr-1" /> Zapisz ustawienia</Button>}
             </CardContent>
           </Card>
         </TabsContent>

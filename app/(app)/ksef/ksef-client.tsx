@@ -23,11 +23,53 @@ export function KsefClient() {
   const [loading, setLoading] = useState(true);
   const [configForm, setConfigForm] = useState({ nip: '', token: '', environment: 'TEST', active: false });
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [fetchDialogOpen, setFetchDialogOpen] = useState(false);
+  const [fetching, setFetching] = useState(false);
+  const [fetchLogs, setFetchLogs] = useState<string[]>([]);
+  const [fetchRange, setFetchRange] = useState({ dateFrom: '', dateTo: '' });
   const [form, setForm] = useState({ invoiceNumber: '', ksefNumber: '', issueDate: '', sellerName: '', sellerNip: '', grossAmount: '', netAmount: '', vatAmount: '', isFuel: false, fuelLiters: '', fuelPricePerLiter: '' });
 
   const fetchConfig = () => { fetch('/api/ksef/config').then(r => r.json()).then(d => { setConfig(d ?? {}); setConfigForm({ nip: d?.nip ?? '', token: '', environment: d?.environment ?? 'TEST', active: d?.active ?? false }); }).catch(() => {}); };
   const fetchInvoices = () => { fetch('/api/ksef/invoices').then(r => r.json()).then(d => setInvoices(d ?? [])).catch(() => {}).finally(() => setLoading(false)); };
   useEffect(() => { fetchConfig(); fetchInvoices(); }, []);
+
+  const openFetchDialog = () => {
+    const now = new Date();
+    const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+    setFetchRange({
+      dateFrom: firstDay.toISOString().split('T')[0],
+      dateTo: now.toISOString().split('T')[0],
+    });
+    setFetchLogs([]);
+    setFetchDialogOpen(true);
+  };
+
+  const fetchFromKsef = async () => {
+    setFetching(true);
+    setFetchLogs(['Łączenie z KSeF...']);
+    try {
+      const res = await fetch('/api/ksef/fetch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(fetchRange),
+      });
+      const data = await res.json();
+      if (data?.logs) setFetchLogs(data.logs);
+      if (res.ok && data?.success) {
+        toast.success(`Pobrano ${data.imported} faktur z KSeF${data.skipped ? ` (pominięto ${data.skipped} duplikatów)` : ''}`);
+        fetchInvoices();
+        setFetchDialogOpen(false);
+      } else {
+        toast.error(data?.error ?? 'Błąd pobierania z KSeF');
+        if (data?.hint) setFetchLogs(prev => [...prev, `💡 ${data.hint}`]);
+      }
+    } catch (e: any) {
+      toast.error('Błąd połączenia z KSeF');
+      setFetchLogs(prev => [...prev, `Błąd: ${e?.message}`]);
+    } finally {
+      setFetching(false);
+    }
+  };
 
   const saveConfig = async () => {
     const res = await fetch('/api/ksef/config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(configForm) });
@@ -72,8 +114,53 @@ export function KsefClient() {
         <TabsContent value="invoices">
           <div className="flex justify-between items-center mb-4">
             <p className="text-sm text-muted-foreground">Zarządzaj fakturami i oznaczaj faktury paliwowe</p>
-            <Button onClick={openNew}><Plus className="w-4 h-4 mr-1" /> Dodaj fakturę</Button>
+            <div className="flex gap-2">
+              {config?.active && config?.hasToken && isAdmin && (
+                <Button variant="outline" onClick={openFetchDialog}><Download className="w-4 h-4 mr-1" /> Pobierz z KSeF</Button>
+              )}
+              <Button onClick={openNew}><Plus className="w-4 h-4 mr-1" /> Dodaj fakturę</Button>
+            </div>
           </div>
+
+          {/* Dialog pobierania z KSeF */}
+          <Dialog open={fetchDialogOpen} onOpenChange={setFetchDialogOpen}>
+            <DialogContent className="max-w-lg">
+              <DialogHeader><DialogTitle>Pobierz faktury z KSeF</DialogTitle></DialogHeader>
+              <div className="space-y-4">
+                <p className="text-sm text-muted-foreground">
+                  System połączy się z Krajowym Systemem e-Faktur i pobierze faktury kosztowe (zakupowe) z podanego zakresu dat.
+                </p>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Data od</Label>
+                    <Input type="date" value={fetchRange.dateFrom} onChange={(e: any) => setFetchRange(p => ({...p, dateFrom: e?.target?.value ?? ''}))} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Data do</Label>
+                    <Input type="date" value={fetchRange.dateTo} onChange={(e: any) => setFetchRange(p => ({...p, dateTo: e?.target?.value ?? ''}))} />
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 text-sm">
+                  <Badge variant="secondary">{config?.environment === 'PROD' ? 'Produkcja' : 'Test'}</Badge>
+                  <span className="text-muted-foreground">NIP: {config?.nip || '—'}</span>
+                </div>
+                {fetchLogs.length > 0 && (
+                  <div className="bg-muted rounded-md p-3 max-h-48 overflow-y-auto">
+                    <p className="text-xs font-medium mb-1">Logi połączenia:</p>
+                    {fetchLogs.map((l, i) => (
+                      <p key={i} className={`text-xs font-mono ${l.startsWith('Błąd') || l.includes('failed') ? 'text-red-600' : 'text-muted-foreground'}`}>{l}</p>
+                    ))}
+                  </div>
+                )}
+                <div className="flex justify-end gap-2">
+                  <Button variant="outline" onClick={() => setFetchDialogOpen(false)} disabled={fetching}>Anuluj</Button>
+                  <Button onClick={fetchFromKsef} disabled={fetching}>
+                    {fetching ? 'Pobieranie...' : 'Pobierz faktury'}
+                  </Button>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
 
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
             <DialogContent className="max-w-lg">
@@ -171,7 +258,7 @@ export function KsefClient() {
                 <Input type="password" value={configForm.token} onChange={(e: any) => setConfigForm(p => ({...(p ?? {}), token: e?.target?.value ?? ''}))} placeholder={config?.hasToken ? '******** (zapisany)' : 'Wklej token'} />
                 <p className="text-xs text-muted-foreground">Token jest przechowywany w zaszyfrowanej formie w bazie danych</p>
               </div>
-              <Button onClick={saveConfig}><Save className="w-4 h-4 mr-1" /> Zapisz konfigurację</Button>
+              {isAdmin && <Button onClick={saveConfig}><Save className="w-4 h-4 mr-1" /> Zapisz konfigurację</Button>}
             </CardContent>
           </Card>
         </TabsContent>
