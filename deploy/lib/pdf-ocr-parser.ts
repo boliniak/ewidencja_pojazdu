@@ -371,7 +371,7 @@ function extractFuelData(text: string, upper: string, amount: number): { liters:
   if (fuelLineMatch) {
     const qty = parsePolishNumber(fuelLineMatch[1]);
     // Cena może być zgarbled: "6:2]" zamiast "6,21" — spróbuj naprawić
-    let priceStr = fuelLineMatch[2].replace(/[:\]\[})/g, ',').replace(/,,+/g, ',');
+    let priceStr = fuelLineMatch[2].replace(/[:\]\[{})]/g, ',').replace(/,,+/g, ',');
     const price = parsePolishNumber(priceStr);
     if (qty >= 1 && qty <= 500) liters = round2(qty);
     if (price >= 2 && price <= 15) pricePerLiter = round2(price);
