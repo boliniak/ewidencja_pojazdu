@@ -9,29 +9,28 @@ import { callLlm } from '@/lib/llm-client';
 const FUEL_KEYWORDS = ['BP', 'ORLEN', 'LOTOS', 'SHELL', 'CIRCLE K', 'AMIC', 'MOYA', 'STACJA PALIW', 'FUEL', 'MOL', 'TOTAL', 'BENZYNA', 'DIESEL', 'ON ', 'PB95', 'PB98', 'LPG', 'PALIW'];
 
 /**
- * Parsuj PDF za pomocą LLM (jeśli dostępny OPENAI_API_KEY)
+ * Parsuj PDF za pomocą LLM (Abacus AI lub OpenAI)
  */
 async function parsePdfWithLlm(base64String: string, fileName: string): Promise<any[]> {
-  if (!process.env.OPENAI_API_KEY) return [];
+  if (!process.env.ABACUSAI_API_KEY && !process.env.OPENAI_API_KEY) return [];
 
-  const parsePrompt = `Przeanalizuj tę fakturę w formacie PDF. Wyodrębnij dane.
+  const parsePrompt = `Przeanalizuj dokładnie tę fakturę/rachunek PDF. Wyodrębnij dane.
 
-Zwróć JSON:
-{
-  "invoices": [{
-    "invoiceNumber": "numer faktury",
-    "issueDate": "YYYY-MM-DD",
-    "sellerName": "nazwa sprzedawcy",
-    "sellerNip": "NIP 10 cyfr",
-    "grossAmount": 0,
-    "netAmount": 0,
-    "vatAmount": 0,
-    "isFuel": false,
-    "fuelLiters": null,
-    "fuelPricePerLiter": null
-  }]
-}
-Odpowiedz TYLKO czystym JSON.`;
+WAŻNE zasady:
+- invoiceNumber: dokładny numer faktury (np. "I26140B1005229", "FV/123/2026"). NIE kopiuj kwot ani ilości jako numer.
+- issueDate: data wystawienia YYYY-MM-DD
+- sellerName: pełna nazwa sprzedawcy
+- sellerNip: NIP sprzedawcy 10 cyfr
+- grossAmount: kwota brutto (DO ZAPŁATY)
+- netAmount: kwota netto
+- vatAmount: kwota VAT
+- isFuel: true jeśli paliwo (stacja, benzyna, diesel, ON, PB95, LPG)
+- fuelLiters: litry paliwa (np. 67.49), null jeśli nie paliwowa
+- fuelPricePerLiter: cena netto/litr (np. 6.21), null jeśli nie
+
+Odpowiedz TYLKO czystym JSON:
+{"invoices": [{"invoiceNumber": "", "issueDate": "", "sellerName": "", "sellerNip": "", "grossAmount": 0, "netAmount": 0, "vatAmount": 0, "isFuel": false, "fuelLiters": null, "fuelPricePerLiter": null}]}
+Bez markdown.`;
 
   try {
     // Sposób 1: typ "file"
@@ -102,7 +101,7 @@ export async function POST(request: Request) {
       } catch (ocrErr: any) {
         console.error('[PDF] Błąd OCR:', ocrErr?.message);
         return NextResponse.json({
-          error: `Nie udało się przeanalizować PDF. ${!process.env.OPENAI_API_KEY ? 'Skonfiguruj OPENAI_API_KEY w .env dla lepszej dokładności.' : ''} Błąd: ${ocrErr?.message ?? 'nieznany'}`
+          error: `Nie udało się przeanalizować PDF. ${!process.env.ABACUSAI_API_KEY && !process.env.OPENAI_API_KEY ? 'Skonfiguruj ABACUSAI_API_KEY lub OPENAI_API_KEY w .env.' : ''} Błąd: ${ocrErr?.message ?? 'nieznany'}`
         }, { status: 422 });
       }
     }

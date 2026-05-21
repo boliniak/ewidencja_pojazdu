@@ -22,42 +22,25 @@ export async function POST(request: Request) {
     const fileBuffer = await file.arrayBuffer();
     const base64String = Buffer.from(fileBuffer).toString('base64');
 
-    const parsePrompt = `Przeanalizuj tę fakturę/rachunek w formacie PDF. Wyodrębnij dane faktury.
+    const parsePrompt = `Przeanalizuj dokładnie tę fakturę/rachunek PDF. Wyodrębnij dane.
 
-Dla każdej faktury podaj:
-- invoiceNumber (numer faktury)
-- issueDate (data wystawienia, format YYYY-MM-DD)
-- sellerName (nazwa sprzedawcy/wystawcy)
-- sellerNip (NIP sprzedawcy, 10 cyfr bez myślników)
-- grossAmount (kwota brutto jako liczba)
-- netAmount (kwota netto jako liczba)
-- vatAmount (kwota VAT jako liczba)
-- isFuel (true jeśli to faktura paliwowa: stacja paliw, benzyna, diesel, ON, PB, LPG)
-- fuelLiters (ilość litrów paliwa jako liczba, jeśli to faktura paliwowa, null jeśli nie)
-- fuelPricePerLiter (cena netto za litr paliwa jako liczba, jeśli to faktura paliwowa, null jeśli nie)
-- items (lista pozycji faktury, każda z: name, quantity, unit, unitPrice, netValue, grossValue)
+WAŻNE zasady:
+- invoiceNumber: dokładny numer faktury (np. "I26140B1005229", "FV/123/2026"). NIE kopiuj kwot ani ilości jako numer faktury.
+- issueDate: data wystawienia w formacie YYYY-MM-DD
+- sellerName: pełna nazwa sprzedawcy (np. "BP Europa SE Oddział w Polsce")
+- sellerNip: NIP sprzedawcy, 10 cyfr bez myślników
+- grossAmount: kwota brutto (DO ZAPŁATY) jako liczba
+- netAmount: kwota netto jako liczba
+- vatAmount: kwota VAT jako liczba
+- isFuel: true jeśli faktura dotyczy paliwa (stacja paliw, benzyna, diesel, ON, PB95, LPG)
+- fuelLiters: ilość litrów paliwa (np. 67.49), null jeśli nie paliwowa
+- fuelPricePerLiter: cena netto za litr (np. 6.21), null jeśli nie paliwowa
 
-Jeśli PDF zawiera więcej niż jedną fakturę, zwróć je wszystkie.
+Jeśli PDF zawiera wiele faktur, zwróć wszystkie.
 
-Odpowiedz TYLKO czystym JSON w formacie:
-{
-  "invoices": [
-    {
-      "invoiceNumber": "...",
-      "issueDate": "YYYY-MM-DD",
-      "sellerName": "...",
-      "sellerNip": "...",
-      "grossAmount": 0,
-      "netAmount": 0,
-      "vatAmount": 0,
-      "isFuel": false,
-      "fuelLiters": null,
-      "fuelPricePerLiter": null,
-      "items": [{ "name": "...", "quantity": 0, "unit": "...", "unitPrice": 0, "netValue": 0, "grossValue": 0 }]
-    }
-  ]
-}
-Nie używaj markdown, code blocks ani formatowania.`;
+Odpowiedz TYLKO czystym JSON:
+{"invoices": [{"invoiceNumber": "", "issueDate": "", "sellerName": "", "sellerNip": "", "grossAmount": 0, "netAmount": 0, "vatAmount": 0, "isFuel": false, "fuelLiters": null, "fuelPricePerLiter": null}]}
+Bez markdown, bez code blocks.`;
 
     const llmResponse = await fetch('https://apps.abacus.ai/v1/chat/completions', {
       method: 'POST',
