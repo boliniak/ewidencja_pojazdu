@@ -11,6 +11,8 @@ interface DashboardStats {
   fuelPurchaseCount: number;
   invoiceCount: number;
   avgConsumption: number | null;
+  totalFuelLiters: number;
+  totalFuelAmount: number;
 }
 
 export function DashboardClient() {
@@ -29,7 +31,7 @@ export function DashboardClient() {
     { label: 'Pojazdy', value: stats?.vehicleCount ?? 0, icon: Car, color: 'text-blue-600 bg-blue-50' },
     { label: 'Wpisy ewidencji', value: stats?.entryCount ?? 0, icon: FileText, color: 'text-green-600 bg-green-50' },
     { label: 'Łącznie km', value: stats?.totalKm?.toFixed?.(0) ?? '0', icon: TrendingUp, color: 'text-purple-600 bg-purple-50' },
-    { label: 'Zakupy paliwa', value: stats?.fuelPurchaseCount ?? 0, icon: Fuel, color: 'text-orange-600 bg-orange-50' },
+    { label: 'Zakupy paliwa', value: (stats?.fuelPurchaseCount ?? 0) > 0 ? `${stats?.fuelPurchaseCount} (${stats?.totalFuelLiters?.toFixed?.(1) ?? '0'} L)` : '0', icon: Fuel, color: 'text-orange-600 bg-orange-50' },
     { label: 'Faktury KSeF', value: stats?.invoiceCount ?? 0, icon: Receipt, color: 'text-indigo-600 bg-indigo-50' },
     { label: 'Śr. spalanie (l/100km)', value: stats?.avgConsumption?.toFixed?.(1) ?? 'Brak danych', icon: AlertTriangle, color: 'text-red-600 bg-red-50' },
   ];
