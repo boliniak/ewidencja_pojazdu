@@ -23,8 +23,8 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session || (session.user as any)?.role !== 'ADMIN') {
-      return NextResponse.json({ error: 'Brak uprawnień' }, { status: 403 });
+    if (!session) {
+      return NextResponse.json({ error: 'Brak uprawnień' }, { status: 401 });
     }
     const body = await request.json();
     const existing = await prisma.ksefConfig.findFirst();

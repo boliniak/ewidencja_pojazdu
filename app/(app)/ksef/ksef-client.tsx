@@ -171,7 +171,7 @@ export function KsefClient() {
                 <Input type="password" value={configForm.token} onChange={(e: any) => setConfigForm(p => ({...(p ?? {}), token: e?.target?.value ?? ''}))} placeholder={config?.hasToken ? '******** (zapisany)' : 'Wklej token'} />
                 <p className="text-xs text-muted-foreground">Token jest przechowywany w zaszyfrowanej formie w bazie danych</p>
               </div>
-              {isAdmin && <Button onClick={saveConfig}><Save className="w-4 h-4 mr-1" /> Zapisz konfigurację</Button>}
+              <Button onClick={saveConfig}><Save className="w-4 h-4 mr-1" /> Zapisz konfigurację</Button>
             </CardContent>
           </Card>
         </TabsContent>
